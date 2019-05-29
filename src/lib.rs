@@ -22,7 +22,7 @@ pub struct Api {
 }
 
 impl Api {
-    pub fn connect(url: Url) -> Result<Self> {
+    pub fn init(url: Url) -> Result<Self> {
         let json_req = json!({
             "method": "chain_getBlockHash",
             "params": [0],
@@ -32,7 +32,7 @@ impl Api {
 
         match url {
             Url::Local => {
-                let genesis_hash_str = get_request(WS_URL_LOCAL, json_req.to_string())?;
+                let genesis_hash_str = get_response(WS_URL_LOCAL, json_req.to_string())?;
 
                 Ok(Api {
                     url: WS_URL_LOCAL.to_owned(),
@@ -40,7 +40,7 @@ impl Api {
                 })
             },
             Url::Custom(url) => {
-                let genesis_hash_str = get_request(url, json_req.to_string())?;
+                let genesis_hash_str = get_response(url, json_req.to_string())?;
 
                 Ok(Api {
                     url: url.to_owned(),
@@ -59,18 +59,18 @@ impl Api {
             "id": "1",
         });
 
-        get_request(&self.url[..], req.to_string())
+        get_response(&self.url[..], req.to_string())
     }
 }
 
-pub fn get_request(url: &str, req: String) -> Result<String> {
+pub fn get_response(url: &str, req: String) -> Result<String> {
     let (tx, rx) = unbounded();
 
     crossbeam::scope(|scope| {
         scope.spawn(move |_| {
-            connect(url.to_owned(), |out| {
+            connect(url.to_owned(), |output| {
                 Getter {
-                    out,
+                    output,
                     request: req.clone(),
                     result: tx.clone(),
                 }
@@ -82,15 +82,18 @@ pub fn get_request(url: &str, req: String) -> Result<String> {
 }
 
 struct Getter {
-    out: Sender,    // websocket sender
+    /// A representation of the output of the WebSocket connection.
+    output: Sender,
+    /// The json request data which is formatted string type.
     request: String,
+    /// The sending side of a channel.
     result: ThreadOut<String>,
 }
 
 impl Handler for Getter {
     // Start handshake from clients
     fn on_open(&mut self, _: Handshake) -> Result<()> {
-        self.out.send(self.request.clone())
+        self.output.send(self.request.clone())
             .map_err(|_| Error::new(ErrorKind::Internal, "must connect"))?;
         Ok(())
     }
@@ -107,9 +110,13 @@ impl Handler for Getter {
 
         self.result.send(hex_str)
             .map_err(|_| Error::new(ErrorKind::Internal, "must run"))?;
-        self.out.close(CloseCode::Normal)?;
+        self.output.close(CloseCode::Normal)?;
         Ok(())
     }
+}
+
+struct Subscriber {
+
 }
 
 #[cfg(test)]
@@ -118,7 +125,7 @@ mod tests{
 
     #[test]
     fn test_get_storage() {
-        let api = Api::connect(Url::Local).unwrap();
+        let api = Api::init(Url::Local).unwrap();
         let res_str = api.get_storage("Balances", "transactionBaseFee", None).unwrap();
         let res = hexstr_to_u256(res_str);
         println!("TransactionBaseFee is {}", res);
