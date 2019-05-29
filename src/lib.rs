@@ -10,14 +10,14 @@ use utils::*;
 
 const WS_URL_LOCAL: &str = "ws://127.0.0.1:9944";
 
-pub enum Url<'a> {
+pub enum Url {
     Local,
-    Custom(&'a str),
+    Custom(&'static str),
 }
 
 pub struct Api {
     url: String,
-    genesis_hash: Option<Hash>,
+    genesis_hash: Hash,
 }
 
 impl Api {
@@ -31,32 +31,35 @@ impl Api {
 
         match url {
             Url::Local => {
-                let local = WS_URL_LOCAL.to_owned();
-                let genesis_hash_str = get_request(local, json_req.to_string());
-                Api {
-                    url: local,
+                let genesis_hash_str = get_request(WS_URL_LOCAL, json_req.to_string()).unwrap();
 
+                Api {
+                    url: WS_URL_LOCAL.to_owned(),
+                    genesis_hash: hexstr_to_hash(genesis_hash_str)
                 }
             },
             Url::Custom(url) => {
-                let genesis_hash_str = get_request(url.to_owned(), json_req.to_string());
+                let genesis_hash_str = get_request(url, json_req.to_string()).unwrap();
+
+                Api {
+                    url: url.to_owned(),
+                    genesis_hash: hexstr_to_hash(genesis_hash_str)
+                }
             }
-        };
-
-
+        }
     }
 }
 
-pub fn get_request(url: String, req: String) -> Result<String> {
+pub fn get_request(url: &'static str, req: String) -> Result<String> {
     let (tx, rx) = channel();
     let client = thread::Builder::new()
         .name("client".to_owned())
         .spawn(move || {
-            connect(url, |out| {
+            connect(url.to_owned(), |out| {
                 Getter {
                     out,
-                    request: req,
-                    result: tx,
+                    request: req.clone(),
+                    result: tx.clone(),
                 }
             }).unwrap()
         }).unwrap();

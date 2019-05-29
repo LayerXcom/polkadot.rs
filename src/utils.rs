@@ -21,7 +21,7 @@ pub fn hexstr_to_vec(hexstr: String) -> Vec<u8> {
         _hexstr.remove(0);
     }
     else {
-        info!("converting non-prefixed hex string")
+        panic!("converting non-prefixed hex string")
     }
     hex::decode(&_hexstr).unwrap()
 }
