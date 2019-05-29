@@ -2,8 +2,7 @@
 use ws::{connect, Result, Handler, Sender, Message, Handshake, CloseCode};
 use serde_json::json;
 use node_primitives::Hash;
-use std::thread;
-use ws::ErrorKind;
+use ws::{ErrorKind, Error};
 use crossbeam;
 use crossbeam::channel::{unbounded, Sender as ThreadOut};
 
@@ -75,7 +74,7 @@ pub fn get_request(url: &str, req: String) -> Result<String> {
                     request: req.clone(),
                     result: tx.clone(),
                 }
-            }).unwrap()
+            }).expect("must connect")
         });
     }).expect("must run");
 
@@ -83,7 +82,7 @@ pub fn get_request(url: &str, req: String) -> Result<String> {
 }
 
 struct Getter {
-    out: Sender,
+    out: Sender,    // websocket sender
     request: String,
     result: ThreadOut<String>,
 }
@@ -91,20 +90,24 @@ struct Getter {
 impl Handler for Getter {
     // Start handshake from clients
     fn on_open(&mut self, _: Handshake) -> Result<()> {
-        self.out.send(self.request.clone()).unwrap();
+        self.out.send(self.request.clone())
+            .map_err(|_| Error::new(ErrorKind::Internal, "must connect"))?;
         Ok(())
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
         let txt = msg.as_text()?;
-        let value: serde_json::Value = serde_json::from_str(txt).unwrap();
+        let value: serde_json::Value = serde_json::from_str(txt)
+            .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
 
         let hex_str = match value["result"].as_str() {
             Some(res) => res.to_string(),
-            _ => "0x00".to_string(),
+            None => "0x00".to_string(),
         };
-        self.result.send(hex_str).unwrap();
-        self.out.close(CloseCode::Normal).unwrap();
+
+        self.result.send(hex_str)
+            .map_err(|_| Error::new(ErrorKind::Internal, "must run"))?;
+        self.out.close(CloseCode::Normal)?;
         Ok(())
     }
 }
