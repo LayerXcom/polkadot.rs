@@ -2,7 +2,6 @@
 use ws::{connect, Result, Handler, Sender, Message, Handshake, CloseCode};
 use serde_json::json;
 use node_primitives::Hash;
-// use std::sync::mpsc::{channel, Sender as ThreadOut};
 use std::thread;
 use ws::ErrorKind;
 use crossbeam;
@@ -110,29 +109,15 @@ impl Handler for Getter {
     }
 }
 
-// #[cfg(test)]
-// mod tests{
-//     use super::*;
-//     use futures::prelude::*;
-//     use jsonrpc_core_client::{RpcChannel, RpcError};
-//     use jsonrpc_core::{IoHandler, Result};
-//     use failure::Error;
-//     use substrate_rpc::system::{System, SystemApi};
-//     use jsonrpc_derive::rpc;
+#[cfg(test)]
+mod tests{
+    use super::*;
 
-//     impl From<RpcChannel> for System {
-//         fn from(channel: RpcChannel) -> Self {
-
-//         }
-//     }
-
-//     #[test]
-//     fn test_try() {
-//         let mut io = IoHandler::new();
-//         io.extend_with(System.to_delegate());
-
-//         let client = connect::<_>(WS_URL_LOCAL).unwrap();
-//         client.wait().unwrap().system_name().map(|res| println!("res: {:?}", res));
-
-//     }
-// }
+    #[test]
+    fn test_get_storage() {
+        let api = Api::connect(Url::Local).unwrap();
+        let res_str = api.get_storage("Balances", "transactionBaseFee", None).unwrap();
+        let res = hexstr_to_u256(res_str);
+        println!("TransactionBaseFee is {}", res);
+    }
+}
