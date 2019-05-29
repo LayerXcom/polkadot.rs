@@ -1,0 +1,37 @@
+[package]
+name = "polkadot-rs"
+version = "0.1.0"
+authors = ["Osuke Sudo <dish230@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+jsonrpc-core-client = { git = "https://github.com/paritytech/jsonrpc", rev = "ff4e20ecce6321835aab7a81cbb6fa2458a6082d"}
+jsonrpc-derive = { git = "https://github.com/paritytech/jsonrpc", rev = "ff4e20ecce6321835aab7a81cbb6fa2458a6082d"}
+jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc", rev = "ff4e20ecce6321835aab7a81cbb6fa2458a6082d"}
+log = "0.4"
+futures = "0.1.26"
+failure = "0.1"
+ws = "0.7"
+hex = "0.3"
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"
+primitive-types = { version = "0.2", default-features = false, features = ["codec"] }
+
+[dependencies.primitives]
+git = 'https://github.com/paritytech/substrate.git'
+package = 'substrate-primitives'
+rev = '59d5ec144704cec017a01f3e4dbb6b73c5542bf7'
+
+[dependencies.node-primitives]
+git = 'https://github.com/paritytech/substrate'
+rev = '59d5ec144704cec017a01f3e4dbb6b73c5542bf7'
+
+[dependencies.system]
+git = 'https://github.com/paritytech/substrate.git'
+package = 'srml-system'
+rev = '59d5ec144704cec017a01f3e4dbb6b73c5542bf7'
+
+# [dependencies.substrate-rpc]
+# git = 'https://github.com/paritytech/substrate.git'
+# rev = '59d5ec144704cec017a01f3e4dbb6b73c5542bf7'
