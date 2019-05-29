@@ -1,9 +1,12 @@
 // use jsonrpc_core_client::transports::ws::connect;
-use ws::{connect, Result, Handler, Sender, Message, Handshake};
+use ws::{connect, Result, Handler, Sender, Message, Handshake, CloseCode};
 use serde_json::json;
 use node_primitives::Hash;
-use std::sync::mpsc::{channel, Sender as ThreadOut};
+// use std::sync::mpsc::{channel, Sender as ThreadOut};
 use std::thread;
+use ws::ErrorKind;
+use crossbeam;
+use crossbeam::channel::{unbounded, Sender as ThreadOut};
 
 pub mod utils;
 use utils::*;
@@ -21,7 +24,7 @@ pub struct Api {
 }
 
 impl Api {
-    pub fn connect(url: Url) -> Self {
+    pub fn connect(url: Url) -> Result<Self> {
         let json_req = json!({
             "method": "chain_getBlockHash",
             "params": [0],
@@ -31,30 +34,42 @@ impl Api {
 
         match url {
             Url::Local => {
-                let genesis_hash_str = get_request(WS_URL_LOCAL, json_req.to_string()).unwrap();
+                let genesis_hash_str = get_request(WS_URL_LOCAL, json_req.to_string())?;
 
-                Api {
+                Ok(Api {
                     url: WS_URL_LOCAL.to_owned(),
                     genesis_hash: hexstr_to_hash(genesis_hash_str)
-                }
+                })
             },
             Url::Custom(url) => {
-                let genesis_hash_str = get_request(url, json_req.to_string()).unwrap();
+                let genesis_hash_str = get_request(url, json_req.to_string())?;
 
-                Api {
+                Ok(Api {
                     url: url.to_owned(),
                     genesis_hash: hexstr_to_hash(genesis_hash_str)
-                }
+                })
             }
         }
     }
+
+    pub fn get_storage(&self, module: &str, storage_key: &str, params: Option<Vec<u8>>) -> Result<String> {
+        let key_hash = storage_key_hash(module, storage_key, params);
+        let req = json!({
+            "method": "state_getStorage",
+            "params": [key_hash],
+            "jsonrpc": "2.0",
+            "id": "1",
+        });
+
+        get_request(&self.url[..], req.to_string())
+    }
 }
 
-pub fn get_request(url: &'static str, req: String) -> Result<String> {
-    let (tx, rx) = channel();
-    let client = thread::Builder::new()
-        .name("client".to_owned())
-        .spawn(move || {
+pub fn get_request(url: &str, req: String) -> Result<String> {
+    let (tx, rx) = unbounded();
+
+    crossbeam::scope(|scope| {
+        scope.spawn(move |_| {
             connect(url.to_owned(), |out| {
                 Getter {
                     out,
@@ -62,9 +77,10 @@ pub fn get_request(url: &'static str, req: String) -> Result<String> {
                     result: tx.clone(),
                 }
             }).unwrap()
-        }).unwrap();
+        });
+    }).expect("must run");
 
-    Ok(rx.recv().unwrap())
+    Ok(rx.recv().expect("must not be empty"))
 }
 
 struct Getter {
@@ -74,12 +90,23 @@ struct Getter {
 }
 
 impl Handler for Getter {
+    // Start handshake from clients
     fn on_open(&mut self, _: Handshake) -> Result<()> {
-        unimplemented!();
+        self.out.send(self.request.clone()).unwrap();
+        Ok(())
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
-        unimplemented!();
+        let txt = msg.as_text()?;
+        let value: serde_json::Value = serde_json::from_str(txt).unwrap();
+
+        let hex_str = match value["result"].as_str() {
+            Some(res) => res.to_string(),
+            _ => "0x00".to_string(),
+        };
+        self.result.send(hex_str).unwrap();
+        self.out.close(CloseCode::Normal).unwrap();
+        Ok(())
     }
 }
 
