@@ -28,16 +28,16 @@ pub fn hexstr_to_vec(hexstr: String) -> Vec<u8> {
     hex::decode(&hexstr).unwrap()
 }
 
-pub fn storage_key_hash(module: &str, storage_key: &str, param: Option<Vec<u8>>) -> String {
+pub fn storage_key_hash(module: &str, storage_key: &str, params: Option<Vec<u8>>) -> String {
         let mut key = module.as_bytes().to_vec();
         key.append(&mut vec!(' ' as u8));
         key.append(&mut storage_key.as_bytes().to_vec());
 
         let mut key_hash;
-        match param {
+        match params {
             Some(mut p) => {
                 key.append(&mut p);
-                key_hash = hex::encode(blake2_256(&key));
+                key_hash = hex::encode(twox_128(&key));
                 },
             None => {
                 key_hash = hex::encode(twox_128(&key));

@@ -88,7 +88,8 @@ impl Handler for Getter {
 
         let hex_str = match value["result"].as_str() {
             Some(res) => res.to_string(),
-            None => "0x00".to_string(), // TODO:
+            None => "0x00".to_string(),
+            // None => return Err(Error::new(ErrorKind::Internal, "No result in the storage key of the module")),
         };
 
         self.result.send(hex_str)
@@ -97,35 +98,6 @@ impl Handler for Getter {
         Ok(())
     }
 }
-
-// impl Getter {
-//     pub fn new(output: Sender, request: String, result: ThreadOut<String>) -> Self {
-//         Getter {
-//             output,
-//             request,
-//             result,
-//         }
-//     }
-
-//     pub fn get_response(&self, url: &str, req: String) -> Result<String> {
-//         let (tx, rx) = unbounded();
-
-//         crossbeam::scope(|scope| {
-//             scope.spawn(move |_| {
-//                 connect(url.to_owned(), |output| {
-//                     // self::new(output, req, tx)
-//                     Getter {
-//                         output,
-//                         request: req.clone(),
-//                         result: tx.clone(),
-//                     }
-//                 }).expect("must connect")
-//             });
-//         }).expect("must run");
-
-//         Ok(rx.recv().expect("must not be empty"))
-//     }
-// }
 
 struct Submitter {
     output: Sender,
@@ -224,17 +196,61 @@ pub fn submit(url: &str, req: String) -> Result<Hash> {
 #[cfg(test)]
 mod tests{
     use super::*;
+    use hex_literal::{hex, hex_impl};
+    use zprimitives::pkd_address::PkdAddress;
+    use parity_codec::{Encode, Compact};
+    use primitives::{/*ed25519, sr25519, Pair,*/ blake2_256};
+    // use runtime::{UncheckedExtrinsic, Call, ConfTransferCall};
+    // use runtime_primitives::generic::Era;
+    use primitive_types::U256;
+
+    // pub fn transfer(from: &str, to: &str, amount: U256, genesis_hash: Hash) -> UncheckedExtrinsic {
+	// 	let signer = Sr25519::pair_from_suri(from, Some(""));
+
+	// 	let to = sr25519::Public::from_string(to).ok().or_else(||
+	// 		sr25519::Pair::from_string(to, Some("")).ok().map(|p| p.public())
+	// 	).expect("Invalid 'to' URI; expecting either a secret URI or a public URI.");
+	// 	let amount = Balance::from(amount.low_u128());
+	// 	// let index = Index::from(index.low_u64());
+    //     let index = 0 as u64;
+
+	// 	let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
+
+	// 	let era = Era::immortal();
+
+	// 	debug!("using genesis hash: {:?}", genesis_hash);
+	// 	let raw_payload = (Compact(index), function, era, genesis_hash);
+	// 	let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
+	// 		signer.sign(&blake2_256(payload)[..])
+	// 	} else {
+	// 		signer.sign(payload)
+	// 	});
+	// 	UncheckedExtrinsic::new_signed(
+	// 		index,
+	// 		raw_payload.1,
+	// 		signer.public().into(),
+	// 		signature.into(),
+	// 		era,
+	// 	)
+	// }
 
     #[test]
     fn test_get_storage() {
         let api = Api::init(Url::Local).unwrap();
-        let res_str = api.get_storage("Balances", "transactionBaseFee", None).unwrap();
+        let res_str = api.get_storage("Balances", "ExistentialDeposit", None).unwrap();
+        // let res = api.get_storage("ConfTransfer", "VerifyingKey", None).unwrap();
         let res = hexstr_to_u256(res_str);
         println!("TransactionBaseFee is {}", res);
+
+        let pkd_addr_alice: [u8; 32] = hex!("fd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc2");
+        let alice_address = PkdAddress::from_slice(&pkd_addr_alice);
+        let res = api.get_storage("ConfTransfer", "EncryptedBalance", Some(alice_address.encode())).unwrap();
+        println!("Encrypted balance: {:?}", res);
     }
 
     #[test]
     fn test_submit_extrinsic() {
         let api = Api::init(Url::Local).unwrap();
+
     }
 }
