@@ -60,6 +60,28 @@ impl Api {
         get_response(&self.url[..], req.to_string())
     }
 
+    pub fn get_genesis_blockhash(&self) -> Result<String> {
+        let req = json!({
+            "method": "chain_getBlockHash",
+            "params": [0],
+            "jsonrpc": "2.0",
+            "id": "1",
+        });
+
+        get_response(&self.url[..], req.to_string())
+    }
+
+    pub fn get_latest_header(&self) -> Result<String> {
+        let req = json!({
+            "method": "chain_getHeader",
+            "params": [],
+            "jsonrpc": "2.0",
+            "id": "1",
+        });
+
+        get_response(&self.url[..], req.to_string())
+    }
+
     pub fn get_runtime_version(&self) -> Result<String> {
         let req = json!({
             "method": "state_getRuntimeVersion",
@@ -259,6 +281,13 @@ mod tests{
     }
 
     #[test]
+    fn  test_get_latest_header() {
+        let api = Api::init(Url::Local).unwrap();
+        let res_str = api.get_latest_header().unwrap();
+        println!("Header: {}", res_str);
+    }
+
+    #[test]
     fn test_submit_extrinsic() {
         let api = Api::init(Url::Local).unwrap();
 
@@ -284,10 +313,10 @@ mod tests{
         // println!("fun: {:?}", calls);
 
         // let era = Era::immortal(); // TODO
-        let era = Era::mortal(640, 420);
+        let era = Era::mortal(256, 70);
         let index = 0 as u64;
 
-        let block_hash = api.get_latest_blockhash().unwrap();
+        let block_hash = api.get_genesis_blockhash().unwrap();
 
         println!("block_hash: {:?}", block_hash);
 
@@ -303,15 +332,18 @@ mod tests{
         let rng = &mut XorShiftRng::from_seed([0xbc4f6d44, 0xd62f276c, 0xb963afd0, 0x5455863d]);
         let p_g = zFixedGenerators::Diversifier;
 
-        let vk = PublicKey::from_private(&sk, p_g, params);
+        // let vk = PublicKey::from_private(&sk, p_g, params);
+        let vk = PublicKey::<zBls12>::read(&mut &rvk[..], params).unwrap();
 
         let sig = raw_payload.using_encoded(|payload| {
             if payload.len() > 256 {
                 let msg = blake2_256(payload);
                 let sig = sk.sign(&msg ,rng, p_g, params);
+
                 // verify signature
                 assert!(vk.verify(&msg, &sig, p_g, params));
-                println!("ok");
+                println!("Valid signature");
+
                 sig
             } else {
                 sk.sign(payload ,rng, p_g, params)
