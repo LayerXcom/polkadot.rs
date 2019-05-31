@@ -1,4 +1,4 @@
-use node_primitives::Hash;
+use runtime::Hash;
 use primitive_types::U256;
 use hex;
 use primitives::{twox_128, blake2_256};

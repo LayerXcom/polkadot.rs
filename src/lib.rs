@@ -1,7 +1,7 @@
 // use jsonrpc_core_client::transports::ws::connect;
 use ws::{connect, Result, Handler, Sender, Message, Handshake, CloseCode};
 use serde_json::json;
-use node_primitives::Hash;
+use runtime::Hash; // TODO
 use ws::{ErrorKind, Error};
 use crossbeam;
 use crossbeam::channel::{unbounded, Sender as ThreadOut};
@@ -42,6 +42,17 @@ impl Api {
         let req = json!({
             "method": "state_getStorage",
             "params": [key_hash],
+            "jsonrpc": "2.0",
+            "id": "1",
+        });
+
+        get_response(&self.url[..], req.to_string())
+    }
+
+    pub fn get_latest_blockhash(&self) -> Result<String> {
+        let req = json!({
+            "method": "chain_getBlockHash",
+            "params": [],
             "jsonrpc": "2.0",
             "id": "1",
         });
@@ -197,42 +208,12 @@ pub fn submit(url: &str, req: String) -> Result<Hash> {
 mod tests{
     use super::*;
     use hex_literal::{hex, hex_impl};
-    use zprimitives::pkd_address::PkdAddress;
     use parity_codec::{Encode, Compact};
-    use primitives::{/*ed25519, sr25519, Pair,*/ blake2_256};
-    // use runtime::{UncheckedExtrinsic, Call, ConfTransferCall};
-    // use runtime_primitives::generic::Era;
+    use primitives::blake2_256;
+    use runtime::{UncheckedExtrinsic, Call, ConfTransferCall};
+    use runtime_primitives::generic::Era;
     use primitive_types::U256;
-
-    // pub fn transfer(from: &str, to: &str, amount: U256, genesis_hash: Hash) -> UncheckedExtrinsic {
-	// 	let signer = Sr25519::pair_from_suri(from, Some(""));
-
-	// 	let to = sr25519::Public::from_string(to).ok().or_else(||
-	// 		sr25519::Pair::from_string(to, Some("")).ok().map(|p| p.public())
-	// 	).expect("Invalid 'to' URI; expecting either a secret URI or a public URI.");
-	// 	let amount = Balance::from(amount.low_u128());
-	// 	// let index = Index::from(index.low_u64());
-    //     let index = 0 as u64;
-
-	// 	let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
-
-	// 	let era = Era::immortal();
-
-	// 	debug!("using genesis hash: {:?}", genesis_hash);
-	// 	let raw_payload = (Compact(index), function, era, genesis_hash);
-	// 	let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
-	// 		signer.sign(&blake2_256(payload)[..])
-	// 	} else {
-	// 		signer.sign(payload)
-	// 	});
-	// 	UncheckedExtrinsic::new_signed(
-	// 		index,
-	// 		raw_payload.1,
-	// 		signer.public().into(),
-	// 		signature.into(),
-	// 		era,
-	// 	)
-	// }
+    use zprimitives::{Proof, Ciphertext, PkdAddress, SigVerificationKey};
 
     #[test]
     fn test_get_storage() {
@@ -251,6 +232,33 @@ mod tests{
     #[test]
     fn test_submit_extrinsic() {
         let api = Api::init(Url::Local).unwrap();
+
+        let proof: [u8; 192] = hex!("8ff35054c963afa7e0cbfd42e4517a4ab10a31798134f8d67d95800d788c804dd59dbe551d9f11426c77b567b803b5428aad134e1946a392153c1ab597d763faaa108ac7a7736759811b34252500db10cc40ba70fbbfe2dd71e2d1ee57b6f5791426df5cf6e36e6ec0a92fab2e76403a84c8bccb724429698d794be760f88d488cbbf031afcebed75a996a0e151a5ade889a8ac6a528481444b53949292177136c887afa22f484b7e509bbde20187e7ed3335e53453f010639cab8af1f0b927b");
+        let accountid_sender: [u8; 32] = hex!("fd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc2");
+        let accountid_recipient: [u8; 32] = hex!("45e66da531088b55dcb3b273ca825454d79d2d1d5c4fa2ba4a12c1fa1ccd6389");
+        let enc10_by_sender: [u8; 64] = hex!("5e4d370d5ca213b8da2c14b192cd5ce9176faaf8a0e94f64bb649ccbe7cad827df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33");
+        let enc10_by_recipient: [u8; 64] = hex!("690faa236b77eeceb0940429c8abed2721a83cf4dcd32b5f8bc0e886a39d8ae9df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33");
+        let rvk: [u8; 32] = hex!("f539db3c0075f6394ff8698c95ca47921669c77bb2b23b366f42a39b05a88c96");
+
+        let calls = Call::ConfTransfer(ConfTransferCall::confidential_transfer(
+            Proof::from_slice(&proof[..]),
+            PkdAddress::from_slice(&accountid_sender[..]),
+            PkdAddress::from_slice(&accountid_recipient[..]),
+            Ciphertext::from_slice(&enc10_by_sender[..]),
+            Ciphertext::from_slice(&enc10_by_recipient[..]),
+            SigVerificationKey::from_slice(&rvk[..])
+        ));
+
+        // println!("fun: {:?}", calls);
+
+        let era = Era::immortal(); // TODO
+        let index = 0 as u64;
+
+        let block_hash = api.get_latest_blockhash().unwrap();
+
+        println!("block_hash: {:?}", block_hash);
+
+        let raw_payload = (Compact(index), calls, era, block_hash);
 
     }
 }
