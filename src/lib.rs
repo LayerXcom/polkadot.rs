@@ -60,6 +60,17 @@ impl Api {
         get_response(&self.url[..], req.to_string())
     }
 
+    pub fn get_runtime_version(&self) -> Result<String> {
+        let req = json!({
+            "method": "state_getRuntimeVersion",
+            "params": [],
+            "jsonrpc": "2.0",
+            "id": "1",
+        });
+
+        get_response(&self.url[..], req.to_string())
+    }
+
     pub fn submit_extrinsic(&self, params: String) -> Result<Hash> {
         let req = json!({
             "method": "author_submitAndWatchExtrinsic",
@@ -96,6 +107,8 @@ impl Handler for Getter {
         let txt = msg.as_text()?;
         let value: serde_json::Value = serde_json::from_str(txt)
             .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
+
+        println!("value: {:?}", value);
 
         let hex_str = match value["result"].as_str() {
             Some(res) => res.to_string(),
@@ -134,15 +147,15 @@ impl Handler for Submitter {
                 match id.parse::<u32>() {
                     Ok(REQUEST_SUBMIT) => {
                         match value.get("error") {
-                            Some(err) => {},
-                            None => {},
+                            Some(err) => {println!("A!!:{:?}", value);},
+                            None => {println!("B!!:{:?}", value);},
                         }
                     },
                     Ok(_) => {
-
+println!("C!!");
                     },
                     Err(_) => {
-
+println!("D!!");
                     }
                 }
             },
@@ -150,15 +163,17 @@ impl Handler for Submitter {
                 match value["method"].as_str() {
                     Some("author_extrinsicUpdate") => {
                         match value["params"]["result"].as_str() {
-                            Some(res) => {},
+                            Some(res) => {println!("E: {:?}", value);},
                             None => {
+                                println!("F!!");
+                                println!("F!!: {:?}", hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string()));
                                 self.result.send(hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string())).unwrap();
                                 self.output.close(CloseCode::Normal).unwrap();
                             },
                         }
                     },
-                    Some(_) => {},
-                    None => {},
+                    Some(_) => {println!("G!!");},
+                    None => {println!("H!!");},
                 }
             }
         };
@@ -213,7 +228,13 @@ mod tests{
     use runtime::{UncheckedExtrinsic, Call, ConfTransferCall};
     use runtime_primitives::generic::Era;
     use primitive_types::U256;
-    use zprimitives::{Proof, Ciphertext, PkdAddress, SigVerificationKey};
+    use zprimitives::{Proof, Ciphertext, PkdAddress, SigVerificationKey, RedjubjubSignature};
+    use zjubjub::{curve::{
+        fs::Fs as zFs,
+        JubjubBls12 as zJubjubBls12,
+        FixedGenerators as zFixedGenerators}, redjubjub::{PrivateKey, PublicKey}};
+    use rand::{XorShiftRng, SeedableRng, Rng, Rand};
+    use zpairing::{bls12_381::Bls12 as zBls12, PrimeField, PrimeFieldRepr};
 
     #[test]
     fn test_get_storage() {
@@ -230,6 +251,14 @@ mod tests{
     }
 
     #[test]
+    fn test_get_runtime_version() {
+        let api = Api::init(Url::Local).unwrap();
+        let res_str = api.get_runtime_version().unwrap();
+        // let res = hexstr_to_u256(res_str);
+        println!("Runtime version is {}", res_str);
+    }
+
+    #[test]
     fn test_submit_extrinsic() {
         let api = Api::init(Url::Local).unwrap();
 
@@ -239,6 +268,9 @@ mod tests{
         let enc10_by_sender: [u8; 64] = hex!("5e4d370d5ca213b8da2c14b192cd5ce9176faaf8a0e94f64bb649ccbe7cad827df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33");
         let enc10_by_recipient: [u8; 64] = hex!("690faa236b77eeceb0940429c8abed2721a83cf4dcd32b5f8bc0e886a39d8ae9df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33");
         let rvk: [u8; 32] = hex!("f539db3c0075f6394ff8698c95ca47921669c77bb2b23b366f42a39b05a88c96");
+        let mut rsk_bytes: [u8; 32] = hex!("a36bb97dbe99b6c9e1f58b44130797d088d5439d97748229772449b29ec15909");
+
+        let sig_vk = SigVerificationKey::from_slice(&rvk[..]);
 
         let calls = Call::ConfTransfer(ConfTransferCall::confidential_transfer(
             Proof::from_slice(&proof[..]),
@@ -246,12 +278,13 @@ mod tests{
             PkdAddress::from_slice(&accountid_recipient[..]),
             Ciphertext::from_slice(&enc10_by_sender[..]),
             Ciphertext::from_slice(&enc10_by_recipient[..]),
-            SigVerificationKey::from_slice(&rvk[..])
+            sig_vk
         ));
 
         // println!("fun: {:?}", calls);
 
-        let era = Era::immortal(); // TODO
+        // let era = Era::immortal(); // TODO
+        let era = Era::mortal(640, 420);
         let index = 0 as u64;
 
         let block_hash = api.get_latest_blockhash().unwrap();
@@ -260,5 +293,39 @@ mod tests{
 
         let raw_payload = (Compact(index), calls, era, block_hash);
 
+        let mut rsk_repr = zFs::default().into_repr();
+        rsk_repr.read_le(&mut &rsk_bytes[..]).unwrap();
+        let rsk = zFs::from_repr(rsk_repr).unwrap();
+        let sk = PrivateKey::<zBls12>(rsk);
+
+        let params = &zJubjubBls12::new();
+        // let rng = &mut ChaChaRng::from_seed(seed_slice);
+        let rng = &mut XorShiftRng::from_seed([0xbc4f6d44, 0xd62f276c, 0xb963afd0, 0x5455863d]);
+        let p_g = zFixedGenerators::Diversifier;
+
+        let vk = PublicKey::from_private(&sk, p_g, params);
+
+        let sig = raw_payload.using_encoded(|payload| {
+            if payload.len() > 256 {
+                let msg = blake2_256(payload);
+                let sig = sk.sign(&msg ,rng, p_g, params);
+                // verify signature
+                assert!(vk.verify(&msg, &sig, p_g, params));
+                println!("ok");
+                sig
+            } else {
+                sk.sign(payload ,rng, p_g, params)
+            }
+        });
+
+        let sig = RedjubjubSignature::from_signature(&sig);
+        println!("sig: {:?}", sig);
+        let uxt = UncheckedExtrinsic::new_signed(index, raw_payload.1, sig_vk.into(), sig, era);
+
+        let mut uxt_hex = hex::encode(uxt.encode());
+        uxt_hex.insert_str(0, "0x");
+        println!("Start sending tx....");
+        let tx_hash = api.submit_extrinsic(uxt_hex).unwrap();
+        println!("tx hash: {:?}", tx_hash);
     }
 }

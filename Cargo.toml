@@ -21,6 +21,9 @@ crossbeam = "0.7"
 hex-literal = '0.1'
 zprimitives = { package = "zero-chain-primitives", git = "https://github.com/LayerXcom/zero-chain", rev = "b746911f8d910936d9bbc54dadf649619d5b15fc" }
 runtime = { package = "zero-chain-runtime", git = "https://github.com/LayerXcom/zero-chain", rev = "b746911f8d910936d9bbc54dadf649619d5b15fc" }
+zjubjub = { package = "jubjub", git = "https://github.com/LayerXcom/zero-chain", rev = "b746911f8d910936d9bbc54dadf649619d5b15fc" }
+zpairing = { package = "zero-chain-pairing", git = "https://github.com/LayerXcom/zero-chain", rev = "b746911f8d910936d9bbc54dadf649619d5b15fc" }
+rand = "0.4"
 
 parity-codec = "3.0"
 
