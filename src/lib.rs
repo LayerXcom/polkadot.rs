@@ -71,7 +71,7 @@ impl Api {
         get_response(&self.url[..], req.to_string())
     }
 
-    pub fn get_latest_header(&self) -> Result<String> {
+    pub fn get_latest_height(&self) -> Result<String> {
         let req = json!({
             "method": "chain_getHeader",
             "params": [],
@@ -79,7 +79,7 @@ impl Api {
             "id": "1",
         });
 
-        get_response(&self.url[..], req.to_string())
+        get_height_response(&self.url[..], req.to_string())
     }
 
     pub fn get_runtime_version(&self) -> Result<String> {
@@ -130,9 +130,49 @@ impl Handler for Getter {
         let value: serde_json::Value = serde_json::from_str(txt)
             .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
 
-        println!("value: {:?}", value);
+        // println!("value: {:?}", value);
 
         let hex_str = match value["result"].as_str() {
+            Some(res) => res.to_string(),
+            None => "0x00".to_string(),
+            // None => return Err(Error::new(ErrorKind::Internal, "No result in the storage key of the module")),
+        };
+
+        self.result.send(hex_str)
+            .map_err(|_| Error::new(ErrorKind::Internal, "must run"))?;
+        self.output.close(CloseCode::Normal)?;
+        Ok(())
+    }
+}
+
+struct HeightGetter {
+    /// A representation of the output of the WebSocket connection.
+    output: Sender,
+    /// The json request data which is formatted string type.
+    request: String,
+    /// The sending side of a channel.
+    result: ThreadOut<String>,
+}
+
+impl Handler for HeightGetter {
+    /// Called when the WebSocket handshake is successful and the connection is open for sending
+    /// and receiving messages.
+    fn on_open(&mut self, _: Handshake) -> Result<()> {
+        self.output.send(self.request.clone())
+            .map_err(|_| Error::new(ErrorKind::Internal, "must connect"))?;
+
+        Ok(())
+    }
+
+    /// Called on incoming messages.
+    fn on_message(&mut self, msg: Message) -> Result<()> {
+        let txt = msg.as_text()?;
+        let value: serde_json::Value = serde_json::from_str(txt)
+            .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
+
+        // println!("value: {:?}", value);
+
+        let hex_str = match value["result"]["number"].as_str() {
             Some(res) => res.to_string(),
             None => "0x00".to_string(),
             // None => return Err(Error::new(ErrorKind::Internal, "No result in the storage key of the module")),
@@ -222,6 +262,24 @@ pub fn get_response(url: &str, req: String) -> Result<String> {
     Ok(rx.recv().expect("must not be empty"))
 }
 
+pub fn get_height_response(url: &str, req: String) -> Result<String> {
+    let (tx, rx) = unbounded();
+
+    crossbeam::scope(|scope| {
+        scope.spawn(move |_| {
+            connect(url.to_owned(), |output| {
+                HeightGetter {
+                    output,
+                    request: req.clone(),
+                    result: tx.clone(),
+                }
+            }).expect("must connect")
+        });
+    }).expect("must run");
+
+    Ok(rx.recv().expect("must not be empty"))
+}
+
 // TODO: Getting abstract
 pub fn submit(url: &str, req: String) -> Result<Hash> {
     let (tx, rx) = unbounded();
@@ -283,8 +341,10 @@ mod tests{
     #[test]
     fn  test_get_latest_header() {
         let api = Api::init(Url::Local).unwrap();
-        let res_str = api.get_latest_header().unwrap();
-        println!("Header: {}", res_str);
+        let res_str = api.get_latest_height().unwrap();
+        let res = hexstr_to_u256(res_str);
+
+        println!("res:{}", res);
     }
 
     #[test]
@@ -312,8 +372,11 @@ mod tests{
 
         // println!("fun: {:?}", calls);
 
+        let height_str = api.get_latest_height().unwrap();
+        let height = hexstr_to_u256(height_str);
+
         // let era = Era::immortal(); // TODO
-        let era = Era::mortal(256, 70);
+        let era = Era::mortal(256, height);
         let index = 0 as u64;
 
         let block_hash = api.get_genesis_blockhash().unwrap();
@@ -338,7 +401,7 @@ mod tests{
         let sig = raw_payload.using_encoded(|payload| {
             if payload.len() > 256 {
                 let msg = blake2_256(payload);
-                let sig = sk.sign(&msg ,rng, p_g, params);
+                let sig = sk.sign(&msg[..] ,rng, p_g, params);
 
                 // verify signature
                 assert!(vk.verify(&msg, &sig, p_g, params));
@@ -353,10 +416,12 @@ mod tests{
         let sig = RedjubjubSignature::from_signature(&sig);
         println!("sig: {:?}", sig);
         let uxt = UncheckedExtrinsic::new_signed(index, raw_payload.1, sig_vk.into(), sig, era);
+// version??
 
         let mut uxt_hex = hex::encode(uxt.encode());
         uxt_hex.insert_str(0, "0x");
         println!("Start sending tx....");
+        println!("{}", uxt_hex);
         let tx_hash = api.submit_extrinsic(uxt_hex).unwrap();
         println!("tx hash: {:?}", tx_hash);
     }

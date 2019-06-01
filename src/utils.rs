@@ -25,7 +25,13 @@ pub fn hexstr_to_vec(hexstr: String) -> Vec<u8> {
     else {
         panic!("converting non-prefixed hex string")
     }
-    hex::decode(&hexstr).unwrap()
+
+    if hexstr.len() % 2 == 0 {
+        hex::decode(&hexstr).unwrap()
+    } else {
+        let zero: String = "0".to_string();
+        hex::decode(&format!("{}{}", zero, hexstr)).unwrap()
+    }
 }
 
 pub fn storage_key_hash(module: &str, storage_key: &str, params: Option<Vec<u8>>) -> String {
