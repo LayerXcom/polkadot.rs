@@ -1,7 +1,7 @@
 // use jsonrpc_core_client::transports::ws::connect;
 use ws::{connect, Result, Handler, Sender, Message, Handshake, CloseCode};
 use serde_json::json;
-use runtime::Hash; // TODO
+use runtime::Hash;
 use ws::{ErrorKind, Error};
 use crossbeam;
 use crossbeam::channel::{unbounded, Sender as ThreadOut};
@@ -60,7 +60,7 @@ impl Api {
         get_response(&self.url[..], req.to_string())
     }
 
-    pub fn get_genesis_blockhash(&self) -> Result<String> {
+    pub fn get_genesis_blockhash(&self) -> Result<Hash> {
         let req = json!({
             "method": "chain_getBlockHash",
             "params": [0],
@@ -68,7 +68,8 @@ impl Api {
             "id": "1",
         });
 
-        get_response(&self.url[..], req.to_string())
+        let res = get_response(&self.url[..], req.to_string()).unwrap();
+        Ok(hexstr_to_hash(res))
     }
 
     pub fn get_latest_height(&self) -> Result<String> {
@@ -227,7 +228,6 @@ println!("D!!");
                         match value["params"]["result"].as_str() {
                             Some(res) => {println!("E: {:?}", value);},
                             None => {
-                                println!("F!!");
                                 println!("F!!: {:?}", hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string()));
                                 self.result.send(hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string())).unwrap();
                                 self.output.close(CloseCode::Normal).unwrap();
@@ -320,7 +320,6 @@ mod tests{
     fn test_get_storage() {
         let api = Api::init(Url::Local).unwrap();
         let res_str = api.get_storage("Balances", "ExistentialDeposit", None).unwrap();
-        // let res = api.get_storage("ConfTransfer", "VerifyingKey", None).unwrap();
         let res = hexstr_to_u64(res_str);
         println!("TransactionBaseFee is {}", res);
 
@@ -369,8 +368,6 @@ mod tests{
             sig_vk
         ));
 
-        // println!("fun: {:?}", calls);
-
         let height_str = api.get_latest_height().unwrap();
         let height = hexstr_to_u64(height_str);
         println!("height: {}", height);
@@ -378,7 +375,7 @@ mod tests{
         // let era = Era::mortal(256, height);
         let index = 0 as u64;
 
-        let checkpoint = api.get_latest_blockhash().unwrap();
+        let checkpoint = api.get_genesis_blockhash().unwrap();
 
         println!("block_hash: {:?}", checkpoint.clone());
 
@@ -393,16 +390,14 @@ mod tests{
         let sk = PrivateKey::<zBls12>(rsk);
 
         let params = &zJubjubBls12::new();
-        // let rng = &mut ChaChaRng::from_seed(seed_slice);
         let rng = &mut XorShiftRng::from_seed([0xbc4f6d44, 0xd62f276c, 0xb963afd0, 0x5455863d]);
         let p_g = zFixedGenerators::Diversifier;
 
-        // let vk = PublicKey::from_private(&sk, p_g, params);
         let vk = PublicKey::<zBls12>::read(&mut &rvk[..], params).unwrap();
 
         let sig = raw_payload.using_encoded(|payload| {
             if payload.len() > 256 {
-                println!("payload: {:?}", hex::encode(payload.encode()));
+                println!("payload: {:?}", hex::encode(payload));
                 let msg = blake2_256(payload);
                 let sig = sk.sign(&msg[..] ,rng, p_g, params);
 
@@ -428,7 +423,6 @@ mod tests{
         uxt_hex.insert_str(0, "0x");
         println!("Start sending tx....");
         println!("{}", uxt_hex);
-        // let uxt_hex = "0x350881fff539db3c0075f6394ff8698c95ca47921669c77bb2b23b366f42a39b05a88c96034f17bc85fa18072e4852d777a8d1c4d0bc25112664196d6cb7bdce3483ced1f4ece551365853288831d07ee58d8c8130cdc307860e8b3502b6e536eeada90600b700000001038ff35054c963afa7e0cbfd42e4517a4ab10a31798134f8d67d95800d788c804dd59dbe551d9f11426c77b567b803b5428aad134e1946a392153c1ab597d763faaa108ac7a7736759811b34252500db10cc40ba70fbbfe2dd71e2d1ee57b6f5791426df5cf6e36e6ec0a92fab2e76403a84c8bccb724429698d794be760f88d488cbbf031afcebed75a996a0e151a5ade889a8ac6a528481444b53949292177136c887afa22f484b7e509bbde20187e7ed3335e53453f010639cab8af1f0b927bfd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc245e66da531088b55dcb3b273ca825454d79d2d1d5c4fa2ba4a12c1fa1ccd638901015e4d370d5ca213b8da2c14b192cd5ce9176faaf8a0e94f64bb649ccbe7cad827df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c330101690faa236b77eeceb0940429c8abed2721a83cf4dcd32b5f8bc0e886a39d8ae9df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33f539db3c0075f6394ff8698c95ca47921669c77bb2b23b366f42a39b05a88c96";
         let tx_hash = api.submit_extrinsic(uxt_hex.to_string()).unwrap();
         println!("tx hash: {:?}", tx_hash);
     }

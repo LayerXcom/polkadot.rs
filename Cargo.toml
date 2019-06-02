@@ -32,20 +32,7 @@ git = 'https://github.com/osuketh/substrate.git'
 package = 'substrate-primitives'
 branch = "patch-zerochain"
 
-# [dependencies.node-primitives]
-# git = 'https://github.com/paritytech/substrate'
-# rev = '59d5ec144704cec017a01f3e4dbb6b73c5542bf7'
-
-# [dependencies.system]
-# git = 'https://github.com/paritytech/substrate.git'
-# package = 'srml-system'
-# rev = '59d5ec144704cec017a01f3e4dbb6b73c5542bf7'
-
 [dependencies.runtime_primitives]
 git = 'https://github.com/osuketh/substrate.git'
 branch = "patch-zerochain"
 package = "sr-primitives"
-
-# [dependencies.substrate-rpc]
-# git = 'https://github.com/paritytech/substrate.git'
-# rev = '59d5ec144704cec017a01f3e4dbb6b73c5542bf7'
