@@ -1,19 +1,27 @@
 use runtime::Hash;
-use primitive_types::U256;
 use hex;
 use primitives::{twox_128, blake2_256};
+use byteorder::{ReadBytesExt, LittleEndian, ByteOrder};
+use std::io::Cursor;
 
 pub fn hexstr_to_hash(hexstr: String) -> Hash {
     let vec = hexstr_to_vec(hexstr);
     let mut gh: [u8; 32] = Default::default();
-
     gh.copy_from_slice(&vec);
+
     Hash::from(gh)
 }
 
-pub fn hexstr_to_u256(hexstr: String) -> U256 {
-    let vec = hexstr_to_vec(hexstr);
-    U256::from_little_endian(&mut &vec[..])
+pub fn hexstr_to_u64(hexstr: String) -> u64 {
+    let mut vec = hexstr_to_vec(hexstr);
+
+    if vec.len() % 8 != 0 {
+        for _ in 0..(8 - vec.len() % 8) {
+            // vec.insert(0, 0);
+            vec.push(0);
+        }
+    }
+    LittleEndian::read_u64(&vec[..])
 }
 
 pub fn hexstr_to_vec(hexstr: String) -> Vec<u8> {

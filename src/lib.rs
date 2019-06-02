@@ -307,7 +307,6 @@ mod tests{
     use primitives::blake2_256;
     use runtime::{UncheckedExtrinsic, Call, ConfTransferCall};
     use runtime_primitives::generic::Era;
-    use primitive_types::U256;
     use zprimitives::{Proof, Ciphertext, PkdAddress, SigVerificationKey, RedjubjubSignature};
     use zjubjub::{curve::{
         fs::Fs as zFs,
@@ -315,13 +314,14 @@ mod tests{
         FixedGenerators as zFixedGenerators}, redjubjub::{PrivateKey, PublicKey}};
     use rand::{XorShiftRng, SeedableRng, Rng, Rand};
     use zpairing::{bls12_381::Bls12 as zBls12, PrimeField, PrimeFieldRepr};
+    use byteorder::{ReadBytesExt, LittleEndian, ByteOrder, WriteBytesExt};
 
     #[test]
     fn test_get_storage() {
         let api = Api::init(Url::Local).unwrap();
         let res_str = api.get_storage("Balances", "ExistentialDeposit", None).unwrap();
         // let res = api.get_storage("ConfTransfer", "VerifyingKey", None).unwrap();
-        let res = hexstr_to_u256(res_str);
+        let res = hexstr_to_u64(res_str);
         println!("TransactionBaseFee is {}", res);
 
         let pkd_addr_alice: [u8; 32] = hex!("fd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc2");
@@ -334,7 +334,6 @@ mod tests{
     fn test_get_runtime_version() {
         let api = Api::init(Url::Local).unwrap();
         let res_str = api.get_runtime_version().unwrap();
-        // let res = hexstr_to_u256(res_str);
         println!("Runtime version is {}", res_str);
     }
 
@@ -342,7 +341,7 @@ mod tests{
     fn  test_get_latest_header() {
         let api = Api::init(Url::Local).unwrap();
         let res_str = api.get_latest_height().unwrap();
-        let res = hexstr_to_u256(res_str);
+        let res = hexstr_to_u64(res_str);
 
         println!("res:{}", res);
     }
@@ -373,17 +372,20 @@ mod tests{
         // println!("fun: {:?}", calls);
 
         let height_str = api.get_latest_height().unwrap();
-        let height = hexstr_to_u256(height_str);
-
-        // let era = Era::immortal(); // TODO
-        let era = Era::mortal(256, height);
+        let height = hexstr_to_u64(height_str);
+        println!("height: {}", height);
+        let era = Era::immortal(); // TODO
+        // let era = Era::mortal(256, height);
         let index = 0 as u64;
 
-        let block_hash = api.get_genesis_blockhash().unwrap();
+        let checkpoint = api.get_latest_blockhash().unwrap();
 
-        println!("block_hash: {:?}", block_hash);
+        println!("block_hash: {:?}", checkpoint.clone());
 
-        let raw_payload = (Compact(index), calls, era, block_hash);
+        // let raw_payload = (Compact(index), calls, era, checkpoint);
+        let raw_payload = (Compact(index), calls.clone(), era, checkpoint);
+
+        println!("calls: {:?}", hex::encode(calls.encode()));
 
         let mut rsk_repr = zFs::default().into_repr();
         rsk_repr.read_le(&mut &rsk_bytes[..]).unwrap();
@@ -400,11 +402,13 @@ mod tests{
 
         let sig = raw_payload.using_encoded(|payload| {
             if payload.len() > 256 {
+                println!("payload: {:?}", hex::encode(payload.encode()));
                 let msg = blake2_256(payload);
                 let sig = sk.sign(&msg[..] ,rng, p_g, params);
 
                 // verify signature
                 assert!(vk.verify(&msg, &sig, p_g, params));
+                println!("msg: {:?}", hex::encode(msg.encode()));
                 println!("Valid signature");
 
                 sig
@@ -416,13 +420,16 @@ mod tests{
         let sig = RedjubjubSignature::from_signature(&sig);
         println!("sig: {:?}", sig);
         let uxt = UncheckedExtrinsic::new_signed(index, raw_payload.1, sig_vk.into(), sig, era);
-// version??
+
+        println!("index:{:?}", index);
+        println!("era: {:?}", &era.encode()[..]);
 
         let mut uxt_hex = hex::encode(uxt.encode());
         uxt_hex.insert_str(0, "0x");
         println!("Start sending tx....");
         println!("{}", uxt_hex);
-        let tx_hash = api.submit_extrinsic(uxt_hex).unwrap();
+        // let uxt_hex = "0x350881fff539db3c0075f6394ff8698c95ca47921669c77bb2b23b366f42a39b05a88c96034f17bc85fa18072e4852d777a8d1c4d0bc25112664196d6cb7bdce3483ced1f4ece551365853288831d07ee58d8c8130cdc307860e8b3502b6e536eeada90600b700000001038ff35054c963afa7e0cbfd42e4517a4ab10a31798134f8d67d95800d788c804dd59dbe551d9f11426c77b567b803b5428aad134e1946a392153c1ab597d763faaa108ac7a7736759811b34252500db10cc40ba70fbbfe2dd71e2d1ee57b6f5791426df5cf6e36e6ec0a92fab2e76403a84c8bccb724429698d794be760f88d488cbbf031afcebed75a996a0e151a5ade889a8ac6a528481444b53949292177136c887afa22f484b7e509bbde20187e7ed3335e53453f010639cab8af1f0b927bfd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc245e66da531088b55dcb3b273ca825454d79d2d1d5c4fa2ba4a12c1fa1ccd638901015e4d370d5ca213b8da2c14b192cd5ce9176faaf8a0e94f64bb649ccbe7cad827df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c330101690faa236b77eeceb0940429c8abed2721a83cf4dcd32b5f8bc0e886a39d8ae9df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33f539db3c0075f6394ff8698c95ca47921669c77bb2b23b366f42a39b05a88c96";
+        let tx_hash = api.submit_extrinsic(uxt_hex.to_string()).unwrap();
         println!("tx hash: {:?}", tx_hash);
     }
 }
