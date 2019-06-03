@@ -1,4 +1,4 @@
-use runtime::Hash;
+use crate::Hash;
 use hex;
 use primitives::twox_128;
 use byteorder::{LittleEndian, ByteOrder};

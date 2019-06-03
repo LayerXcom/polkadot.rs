@@ -1,6 +1,6 @@
 use ws::{connect, Result, Handler, Sender, Message, Handshake, CloseCode};
 use serde_json::json;
-use runtime::Hash;
+pub use primitives::H256 as Hash;
 use ws::{ErrorKind, Error};
 use crossbeam;
 use crossbeam::channel::{unbounded, Sender as ThreadOut};
