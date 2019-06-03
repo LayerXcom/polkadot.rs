@@ -10,7 +10,7 @@ pub mod utils;
 use utils::*;
 
 const WS_URL_LOCAL: &str = "ws://127.0.0.1:9944";
-const REQUEST_SUBMIT: u32 = 3;
+const REQUEST_SUBMIT: u32 = 2;
 
 pub enum Url {
     Local,
@@ -171,8 +171,6 @@ impl Handler for HeightGetter {
         let value: serde_json::Value = serde_json::from_str(txt)
             .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
 
-        // println!("value: {:?}", value);
-
         let hex_str = match value["result"]["number"].as_str() {
             Some(res) => res.to_string(),
             None => "0x00".to_string(),
@@ -210,32 +208,48 @@ impl Handler for Submitter {
                 match id.parse::<u32>() {
                     Ok(REQUEST_SUBMIT) => {
                         match value.get("error") {
-                            Some(err) => {println!("A!!:{:?}", value);},
-                            None => {println!("B!!:{:?}", value);},
+                            Some(err) => {
+                                println!("(A)Response: {}", value);
+                                println!("Error: {:?}", err);
+                                self.output.close(CloseCode::Invalid);
+                            },
+                            None => println!("(B)Response: {:?}", value),
                         }
                     },
                     Ok(_) => {
-println!("C!!");
+                        println!("(Unknown request id) Response: {}", value);
+                        self.output.close(CloseCode::Invalid)?;
                     },
                     Err(_) => {
-println!("D!!");
-                    }
+                        println!("(Error assigning request id) Response: {}", value);
+                        self.output.close(CloseCode::Invalid)?;
+                    },
                 }
             },
             None => {
                 match value["method"].as_str() {
                     Some("author_extrinsicUpdate") => {
                         match value["params"]["result"].as_str() {
-                            Some(res) => {println!("E: {:?}", value);},
+                            Some(res) => {
+                                println!("(E)Response: {}", value);
+                            },
                             None => {
-                                println!("F!!: {:?}", hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string()));
-                                self.result.send(hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string())).unwrap();
-                                self.output.close(CloseCode::Normal).unwrap();
+                                self.result.send(hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string()))
+                                    .map_err(|_| Error::new(ErrorKind::Internal, "must connect"))?;
+
+                                self.output.close(CloseCode::Normal)?;
+                                println!("Finalized extrinsic hash: {:?}", hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string()));
                             },
                         }
                     },
-                    Some(_) => {println!("G!!");},
-                    None => {println!("H!!");},
+                    Some(_) => {
+                        println!("(Unsupported method) Response: {}", value);
+                        self.output.close(CloseCode::Invalid)?;
+                    },
+                    None => {
+                        println!("(No method in response) Response: {}", value);
+                        self.output.close(CloseCode::Invalid)?;
+                    },
                 }
             }
         };
@@ -404,7 +418,6 @@ mod tests{
                 // verify signature
                 assert!(vk.verify(&msg, &sig, p_g, params));
                 println!("msg: {:?}", hex::encode(msg.encode()));
-                println!("Valid signature");
 
                 sig
             } else {
@@ -424,6 +437,5 @@ mod tests{
         println!("Start sending tx....");
         println!("{}", uxt_hex);
         let tx_hash = api.submit_extrinsic(uxt_hex.to_string()).unwrap();
-        println!("tx hash: {:?}", tx_hash);
     }
 }
