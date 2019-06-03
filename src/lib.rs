@@ -21,17 +21,17 @@ pub struct Api {
 }
 
 impl Api {
-    pub fn init(url: Url) -> Result<Self> {
+    pub fn init(url: Url) -> Self {
         match url {
             Url::Local => {
-                Ok(Api {
+                Api {
                     url: WS_URL_LOCAL.to_owned()
-                })
+                }
             },
             Url::Custom(url) => {
-                Ok(Api {
+                Api {
                     url: url.to_owned()
-                })
+                }
             }
         }
     }
@@ -257,7 +257,7 @@ impl Handler for Submitter {
     }
 }
 
-pub fn get_response(url: &str, req: String) -> Result<String> {
+fn get_response(url: &str, req: String) -> Result<String> {
     let (tx, rx) = unbounded();
 
     crossbeam::scope(|scope| {
@@ -275,7 +275,7 @@ pub fn get_response(url: &str, req: String) -> Result<String> {
     Ok(rx.recv().expect("must not be empty"))
 }
 
-pub fn get_height_response(url: &str, req: String) -> Result<String> {
+fn get_height_response(url: &str, req: String) -> Result<String> {
     let (tx, rx) = unbounded();
 
     crossbeam::scope(|scope| {
@@ -294,7 +294,7 @@ pub fn get_height_response(url: &str, req: String) -> Result<String> {
 }
 
 // TODO: Getting abstract
-pub fn submit(url: &str, req: String) -> Result<Hash> {
+fn submit(url: &str, req: String) -> Result<Hash> {
     let (tx, rx) = unbounded();
 
     crossbeam::scope(|scope| {
@@ -330,7 +330,7 @@ mod tests{
 
     #[test]
     fn test_get_storage() {
-        let api = Api::init(Url::Local).unwrap();
+        let api = Api::init(Url::Local);
         let res_str = api.get_storage("Balances", "ExistentialDeposit", None).unwrap();
         let res = hexstr_to_u64(res_str);
         println!("TransactionBaseFee is {}", res);
@@ -343,14 +343,14 @@ mod tests{
 
     #[test]
     fn test_get_runtime_version() {
-        let api = Api::init(Url::Local).unwrap();
+        let api = Api::init(Url::Local);
         let res_str = api.get_runtime_version().unwrap();
         println!("Runtime version is {}", res_str);
     }
 
     #[test]
     fn  test_get_latest_header() {
-        let api = Api::init(Url::Local).unwrap();
+        let api = Api::init(Url::Local);
         let res_str = api.get_latest_height().unwrap();
         let res = hexstr_to_u64(res_str);
 
@@ -359,7 +359,7 @@ mod tests{
 
     #[test]
     fn test_submit_extrinsic() {
-        let api = Api::init(Url::Local).unwrap();
+        let api = Api::init(Url::Local);
 
         let proof: [u8; 192] = hex!("8ff35054c963afa7e0cbfd42e4517a4ab10a31798134f8d67d95800d788c804dd59dbe551d9f11426c77b567b803b5428aad134e1946a392153c1ab597d763faaa108ac7a7736759811b34252500db10cc40ba70fbbfe2dd71e2d1ee57b6f5791426df5cf6e36e6ec0a92fab2e76403a84c8bccb724429698d794be760f88d488cbbf031afcebed75a996a0e151a5ade889a8ac6a528481444b53949292177136c887afa22f484b7e509bbde20187e7ed3335e53453f010639cab8af1f0b927b");
         let accountid_sender: [u8; 32] = hex!("fd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc2");
