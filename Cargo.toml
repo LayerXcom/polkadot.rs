@@ -1,0 +1,39 @@
+[package]
+name = "polkadot-rs"
+version = "0.1.0"
+authors = ["Osuke Sudo <dish230@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+jsonrpc-core-client = { git = "https://github.com/paritytech/jsonrpc", rev = "ff4e20ecce6321835aab7a81cbb6fa2458a6082d"}
+jsonrpc-derive = { git = "https://github.com/paritytech/jsonrpc", rev = "ff4e20ecce6321835aab7a81cbb6fa2458a6082d"}
+jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc", rev = "ff4e20ecce6321835aab7a81cbb6fa2458a6082d"}
+log = "0.4"
+futures = "0.1.26"
+failure = "0.1"
+ws = "0.7"
+hex = "0.3"
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"
+byteorder = "1"
+crossbeam = "0.7"
+parity-codec = "3.0"
+
+[dependencies.primitives]
+git = 'https://github.com/osuketh/substrate.git'
+package = 'substrate-primitives'
+branch = "patch-zerochain"
+
+[dependencies.runtime_primitives]
+git = 'https://github.com/osuketh/substrate.git'
+branch = "patch-zerochain"
+package = "sr-primitives"
+
+[dev-dependencies]
+zprimitives = { package = "zero-chain-primitives", git = "https://github.com/LayerXcom/zero-chain", rev = "c84a6087496b7110666009e67f2b480d256ea246" }
+runtime = { package = "zero-chain-runtime", git = "https://github.com/LayerXcom/zero-chain", rev = "c84a6087496b7110666009e67f2b480d256ea246" }
+zjubjub = { package = "jubjub", git = "https://github.com/LayerXcom/zero-chain", rev = "c84a6087496b7110666009e67f2b480d256ea246" }
+zpairing = { package = "zero-chain-pairing", git = "https://github.com/LayerXcom/zero-chain", rev = "c84a6087496b7110666009e67f2b480d256ea246" }
+rand = "0.4"
+hex-literal = '0.1'
