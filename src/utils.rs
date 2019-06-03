@@ -1,8 +1,7 @@
 use runtime::Hash;
 use hex;
-use primitives::{twox_128, blake2_256};
-use byteorder::{ReadBytesExt, LittleEndian, ByteOrder};
-use std::io::Cursor;
+use primitives::twox_128;
+use byteorder::{LittleEndian, ByteOrder};
 
 pub fn hexstr_to_hash(hexstr: String) -> Hash {
     let vec = hexstr_to_vec(hexstr);

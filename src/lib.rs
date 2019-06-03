@@ -1,4 +1,3 @@
-// use jsonrpc_core_client::transports::ws::connect;
 use ws::{connect, Result, Handler, Sender, Message, Handshake, CloseCode};
 use serde_json::json;
 use runtime::Hash;
@@ -211,7 +210,7 @@ impl Handler for Submitter {
                             Some(err) => {
                                 println!("(A)Response: {}", value);
                                 println!("Error: {:?}", err);
-                                self.output.close(CloseCode::Invalid);
+                                self.output.close(CloseCode::Invalid)?;
                             },
                             None => println!("(B)Response: {:?}", value),
                         }
@@ -230,7 +229,7 @@ impl Handler for Submitter {
                 match value["method"].as_str() {
                     Some("author_extrinsicUpdate") => {
                         match value["params"]["result"].as_str() {
-                            Some(res) => {
+                            Some(_res) => {
                                 println!("(E)Response: {}", value);
                             },
                             None => {
@@ -326,9 +325,8 @@ mod tests{
         fs::Fs as zFs,
         JubjubBls12 as zJubjubBls12,
         FixedGenerators as zFixedGenerators}, redjubjub::{PrivateKey, PublicKey}};
-    use rand::{XorShiftRng, SeedableRng, Rng, Rand};
+    use rand::{XorShiftRng, SeedableRng};
     use zpairing::{bls12_381::Bls12 as zBls12, PrimeField, PrimeFieldRepr};
-    use byteorder::{ReadBytesExt, LittleEndian, ByteOrder, WriteBytesExt};
 
     #[test]
     fn test_get_storage() {
@@ -369,7 +367,7 @@ mod tests{
         let enc10_by_sender: [u8; 64] = hex!("5e4d370d5ca213b8da2c14b192cd5ce9176faaf8a0e94f64bb649ccbe7cad827df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33");
         let enc10_by_recipient: [u8; 64] = hex!("690faa236b77eeceb0940429c8abed2721a83cf4dcd32b5f8bc0e886a39d8ae9df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33");
         let rvk: [u8; 32] = hex!("f539db3c0075f6394ff8698c95ca47921669c77bb2b23b366f42a39b05a88c96");
-        let mut rsk_bytes: [u8; 32] = hex!("a36bb97dbe99b6c9e1f58b44130797d088d5439d97748229772449b29ec15909");
+        let rsk_bytes: [u8; 32] = hex!("a36bb97dbe99b6c9e1f58b44130797d088d5439d97748229772449b29ec15909");
 
         let sig_vk = SigVerificationKey::from_slice(&rvk[..]);
 
@@ -387,7 +385,10 @@ mod tests{
         println!("height: {}", height);
         let era = Era::immortal(); // TODO
         // let era = Era::mortal(256, height);
-        let index = 0 as u64;
+        // let index = 0 as u64;
+        let index_str = api.get_storage("System", "AccountNonce", Some(sig_vk.encode())).unwrap();
+        let index = hexstr_to_u64(index_str);
+        println!("index: {}", index);
 
         let checkpoint = api.get_genesis_blockhash().unwrap();
 
@@ -436,6 +437,6 @@ mod tests{
         uxt_hex.insert_str(0, "0x");
         println!("Start sending tx....");
         println!("{}", uxt_hex);
-        let tx_hash = api.submit_extrinsic(uxt_hex.to_string()).unwrap();
+        let _tx_hash = api.submit_extrinsic(uxt_hex.to_string()).unwrap();
     }
 }
