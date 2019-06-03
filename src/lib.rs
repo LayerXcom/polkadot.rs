@@ -1,13 +1,15 @@
-use ws::{connect, Result, Handler, Sender, Message, Handshake, CloseCode};
+use ws::{connect, Result};
 use serde_json::json;
 pub use primitives::H256 as Hash;
-use ws::{ErrorKind, Error};
 use crossbeam;
-use crossbeam::channel::{unbounded, Sender as ThreadOut};
+use crossbeam::channel::unbounded;
 use parity_codec::Encode;
+use runtime_primitives::traits::Extrinsic;
 
 pub mod utils;
+pub mod handler;
 use utils::*;
+use handler::*;
 
 const WS_URL_LOCAL: &str = "ws://127.0.0.1:9944";
 const REQUEST_SUBMIT: u32 = 2;
@@ -41,16 +43,15 @@ impl Api {
         Ok(hexstr_to_u64(index_str))
     }
 
-    // /// Submit an extrinsic to substrate nodes
-    // pub fn submit_extrinsic(
-    //     &self,
-    //     function: &Call,
-    //     signed: &Address,
-    //     sig: &Signature
-    // ) -> Result<Hash> {
-    //     let uxt = UncheckedExtrinsic::new_signed(index, raw_payload.1, sig_vk.into(), sig, era);
-
-    // }
+    /// Submit an extrinsic to substrate nodes
+    pub fn submit_extrinsic<E>(&self, uxt: &E) -> Result<Hash>
+    where
+        E: Extrinsic + Encode,
+    {
+        let mut uxt_hex = hex::encode(uxt.encode());
+        uxt_hex.insert_str(0, "0x");
+        self.submit_raw_extrinsic(uxt_hex)
+    }
 
 
     // -----------------------------------
@@ -66,7 +67,7 @@ impl Api {
             "id": "1",
         });
 
-        get_response(&self.url[..], req.to_string())
+        get_response(&self.0[..], req.to_string())
     }
 
     pub fn get_latest_blockhash(&self) -> Result<String> {
@@ -77,7 +78,7 @@ impl Api {
             "id": "1",
         });
 
-        get_response(&self.url[..], req.to_string())
+        get_response(&self.0[..], req.to_string())
     }
 
     pub fn get_genesis_blockhash(&self) -> Result<Hash> {
@@ -88,7 +89,7 @@ impl Api {
             "id": "1",
         });
 
-        let res = get_response(&self.url[..], req.to_string()).unwrap();
+        let res = get_response(&self.0[..], req.to_string()).unwrap();
         Ok(hexstr_to_hash(res))
     }
 
@@ -100,7 +101,7 @@ impl Api {
             "id": "1",
         });
 
-        get_height_response(&self.url[..], req.to_string())
+        get_height_response(&self.0[..], req.to_string())
     }
 
     pub fn get_runtime_version(&self) -> Result<String> {
@@ -111,7 +112,7 @@ impl Api {
             "id": "1",
         });
 
-        get_response(&self.url[..], req.to_string())
+        get_response(&self.0[..], req.to_string())
     }
 
     pub fn submit_raw_extrinsic(&self, params: String) -> Result<Hash> {
@@ -122,159 +123,7 @@ impl Api {
             "id": REQUEST_SUBMIT.to_string(), // TODO
         });
 
-        submit(&self.url[..], req.to_string())
-    }
-}
-
-struct Getter {
-    /// A representation of the output of the WebSocket connection.
-    output: Sender,
-    /// The json request data which is formatted string type.
-    request: String,
-    /// The sending side of a channel.
-    result: ThreadOut<String>,
-}
-
-impl Handler for Getter {
-    /// Called when the WebSocket handshake is successful and the connection is open for sending
-    /// and receiving messages.
-    fn on_open(&mut self, _: Handshake) -> Result<()> {
-        self.output.send(self.request.clone())
-            .map_err(|_| Error::new(ErrorKind::Internal, "must connect"))?;
-
-        Ok(())
-    }
-
-    /// Called on incoming messages.
-    fn on_message(&mut self, msg: Message) -> Result<()> {
-        let txt = msg.as_text()?;
-        let value: serde_json::Value = serde_json::from_str(txt)
-            .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
-
-        // println!("value: {:?}", value);
-
-        let hex_str = match value["result"].as_str() {
-            Some(res) => res.to_string(),
-            None => "0x00".to_string(),
-            // None => return Err(Error::new(ErrorKind::Internal, "No result in the storage key of the module")),
-        };
-
-        self.result.send(hex_str)
-            .map_err(|_| Error::new(ErrorKind::Internal, "must run"))?;
-        self.output.close(CloseCode::Normal)?;
-        Ok(())
-    }
-}
-
-struct HeightGetter {
-    /// A representation of the output of the WebSocket connection.
-    output: Sender,
-    /// The json request data which is formatted string type.
-    request: String,
-    /// The sending side of a channel.
-    result: ThreadOut<String>,
-}
-
-impl Handler for HeightGetter {
-    /// Called when the WebSocket handshake is successful and the connection is open for sending
-    /// and receiving messages.
-    fn on_open(&mut self, _: Handshake) -> Result<()> {
-        self.output.send(self.request.clone())
-            .map_err(|_| Error::new(ErrorKind::Internal, "must connect"))?;
-
-        Ok(())
-    }
-
-    /// Called on incoming messages.
-    fn on_message(&mut self, msg: Message) -> Result<()> {
-        let txt = msg.as_text()?;
-        let value: serde_json::Value = serde_json::from_str(txt)
-            .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
-
-        let hex_str = match value["result"]["number"].as_str() {
-            Some(res) => res.to_string(),
-            None => "0x00".to_string(),
-            // None => return Err(Error::new(ErrorKind::Internal, "No result in the storage key of the module")),
-        };
-
-        self.result.send(hex_str)
-            .map_err(|_| Error::new(ErrorKind::Internal, "must run"))?;
-        self.output.close(CloseCode::Normal)?;
-        Ok(())
-    }
-}
-
-struct Submitter {
-    output: Sender,
-    request: String,
-    result: ThreadOut<Hash>,
-}
-
-impl Handler for Submitter {
-    fn on_open(&mut self, _: Handshake) -> Result<()> {
-        self.output.send(self.request.clone())
-            .map_err(|_| Error::new(ErrorKind::Internal, "must connect"))?;
-
-        Ok(())
-    }
-
-    fn on_message(&mut self, msg: Message) -> Result<()> {
-        let txt = msg.as_text()?;
-        let value: serde_json::Value = serde_json::from_str(txt)
-            .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
-
-        match value["id"].as_str() {
-            Some(id) => {
-                match id.parse::<u32>() {
-                    Ok(REQUEST_SUBMIT) => {
-                        match value.get("error") {
-                            Some(err) => {
-                                println!("(A)Response: {}", value);
-                                println!("Error: {:?}", err);
-                                self.output.close(CloseCode::Invalid)?;
-                            },
-                            None => println!("(B)Response: {:?}", value),
-                        }
-                    },
-                    Ok(_) => {
-                        println!("(Unknown request id) Response: {}", value);
-                        self.output.close(CloseCode::Invalid)?;
-                    },
-                    Err(_) => {
-                        println!("(Error assigning request id) Response: {}", value);
-                        self.output.close(CloseCode::Invalid)?;
-                    },
-                }
-            },
-            None => {
-                match value["method"].as_str() {
-                    Some("author_extrinsicUpdate") => {
-                        match value["params"]["result"].as_str() {
-                            Some(_res) => {
-                                println!("(E)Response: {}", value);
-                            },
-                            None => {
-                                self.result.send(hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string()))
-                                    .map_err(|_| Error::new(ErrorKind::Internal, "must connect"))?;
-
-                                self.output.close(CloseCode::Normal)?;
-                                println!("Finalized extrinsic hash: {:?}", hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string()));
-                            },
-                        }
-                    },
-                    Some(_) => {
-                        println!("(Unsupported method) Response: {}", value);
-                        self.output.close(CloseCode::Invalid)?;
-                    },
-                    None => {
-                        println!("(No method in response) Response: {}", value);
-                        self.output.close(CloseCode::Invalid)?;
-                    },
-                }
-            }
-        };
-
-        Ok(())
+        submit(&self.0[..], req.to_string())
     }
 }
 
@@ -452,11 +301,7 @@ mod tests{
 
         println!("index:{:?}", index);
         println!("era: {:?}", &era.encode()[..]);
-
-        let mut uxt_hex = hex::encode(uxt.encode());
-        uxt_hex.insert_str(0, "0x");
         println!("Start sending tx....");
-        println!("{}", uxt_hex);
-        let _tx_hash = api.submit_raw_extrinsic(uxt_hex.to_string()).unwrap();
+        let _tx_hash = api.submit_extrinsic(&uxt).unwrap();
     }
 }
