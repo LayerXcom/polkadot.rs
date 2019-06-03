@@ -4,6 +4,7 @@ pub use primitives::H256 as Hash;
 use ws::{ErrorKind, Error};
 use crossbeam;
 use crossbeam::channel::{unbounded, Sender as ThreadOut};
+use parity_codec::Encode;
 
 pub mod utils;
 use utils::*;
@@ -11,30 +12,50 @@ use utils::*;
 const WS_URL_LOCAL: &str = "ws://127.0.0.1:9944";
 const REQUEST_SUBMIT: u32 = 2;
 
+/// Endpoint to connect substrate nodes
 pub enum Url {
+    /// Connecting localhost, 9944 port.
     Local,
+    /// Connecting customized endpoint.
     Custom(&'static str),
 }
 
-pub struct Api {
-    url: String
-}
+/// Define url for json-rpc over websocket
+pub struct Api(String);
 
 impl Api {
     pub fn init(url: Url) -> Self {
         match url {
-            Url::Local => {
-                Api {
-                    url: WS_URL_LOCAL.to_owned()
-                }
-            },
-            Url::Custom(url) => {
-                Api {
-                    url: url.to_owned()
-                }
-            }
+            Url::Local => Api(WS_URL_LOCAL.to_owned()),
+            Url::Custom(url) => Api(url.to_owned()),
         }
     }
+
+    // -----------------------------------
+    // High-level API
+    // -----------------------------------
+
+    /// Get the specified account id's nonce which is stored in `System` module.
+    pub fn get_nonce<E: Encode>(&self, account_id: &E) -> Result<u64> {
+        let index_str = self.get_storage("System", "AccountNonce", Some(account_id.encode()))?;
+        Ok(hexstr_to_u64(index_str))
+    }
+
+    // /// Submit an extrinsic to substrate nodes
+    // pub fn submit_extrinsic(
+    //     &self,
+    //     function: &Call,
+    //     signed: &Address,
+    //     sig: &Signature
+    // ) -> Result<Hash> {
+    //     let uxt = UncheckedExtrinsic::new_signed(index, raw_payload.1, sig_vk.into(), sig, era);
+
+    // }
+
+
+    // -----------------------------------
+    // Low-level API
+    // -----------------------------------
 
     pub fn get_storage(&self, module: &str, storage_key: &str, params: Option<Vec<u8>>) -> Result<String> {
         let key_hash = storage_key_hash(module, storage_key, params);
@@ -93,7 +114,7 @@ impl Api {
         get_response(&self.url[..], req.to_string())
     }
 
-    pub fn submit_extrinsic(&self, params: String) -> Result<Hash> {
+    pub fn submit_raw_extrinsic(&self, params: String) -> Result<Hash> {
         let req = json!({
             "method": "author_submitAndWatchExtrinsic",
             "params": [params],
@@ -385,9 +406,8 @@ mod tests{
         println!("height: {}", height);
         let era = Era::immortal(); // TODO
         // let era = Era::mortal(256, height);
-        // let index = 0 as u64;
-        let index_str = api.get_storage("System", "AccountNonce", Some(sig_vk.encode())).unwrap();
-        let index = hexstr_to_u64(index_str);
+
+        let index = api.get_nonce(&sig_vk).unwrap();
         println!("index: {}", index);
 
         let checkpoint = api.get_genesis_blockhash().unwrap();
@@ -437,6 +457,6 @@ mod tests{
         uxt_hex.insert_str(0, "0x");
         println!("Start sending tx....");
         println!("{}", uxt_hex);
-        let _tx_hash = api.submit_extrinsic(uxt_hex.to_string()).unwrap();
+        let _tx_hash = api.submit_raw_extrinsic(uxt_hex.to_string()).unwrap();
     }
 }
