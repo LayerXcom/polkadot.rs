@@ -28,8 +28,6 @@ impl Handler for Getter {
         let value: serde_json::Value = serde_json::from_str(txt)
             .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
 
-        // println!("value: {:?}", value);
-
         let hex_str = match value["result"].as_str() {
             Some(res) => res.to_string(),
             None => "0x00".to_string(),

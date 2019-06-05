@@ -8,7 +8,7 @@ use runtime_primitives::traits::Extrinsic;
 
 pub mod utils;
 pub mod handler;
-use utils::*;
+pub use utils::*;
 use handler::*;
 
 const WS_URL_LOCAL: &str = "ws://127.0.0.1:9944";
@@ -34,11 +34,14 @@ impl Api {
     }
 
     // -----------------------------------
-    // High-level API
+    //  High-level API
     // -----------------------------------
 
     /// Get the specified account id's nonce which is stored in `System` module.
-    pub fn get_nonce<E: Encode>(&self, account_id: &E) -> Result<u64> {
+    pub fn get_nonce<E>(&self, account_id: &E) -> Result<u64>
+    where
+        E: Encode,
+    {
         let index_str = self.get_storage("System", "AccountNonce", Some(account_id.encode()))?;
         Ok(hexstr_to_u64(index_str))
     }
@@ -55,7 +58,7 @@ impl Api {
 
 
     // -----------------------------------
-    // Low-level API
+    //  Low-level API
     // -----------------------------------
 
     pub fn get_storage(&self, module: &str, storage_key: &str, params: Option<Vec<u8>>) -> Result<String> {
