@@ -23,6 +23,7 @@ pub enum Url {
 }
 
 /// Define url for json-rpc over websocket
+#[derive(Clone, Debug)]
 pub struct Api(String);
 
 impl Api {
@@ -210,7 +211,12 @@ mod tests{
 
         let pkd_addr_alice: [u8; 32] = hex!("fd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc2");
         let alice_address = PkdAddress::from_slice(&pkd_addr_alice);
-        let res = api.get_storage("ConfTransfer", "EncryptedBalance", Some(alice_address.encode())).unwrap();
+        let mut res = api.get_storage("ConfTransfer", "EncryptedBalance", Some(alice_address.encode())).unwrap();
+
+        for _ in 0..4 {
+            res.remove(2);
+        }
+
         println!("Encrypted balance: {:?}", res);
     }
 
