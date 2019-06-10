@@ -104,19 +104,20 @@ impl Handler for Submitter {
                     Ok(_req) => {
                         match value.get("error") {
                             Some(err) => {
-                                println!("(A)Response: {}", value);
-                                println!("Error: {:?}", err);
+                                error!("(A)Response: {}", value);
+                                error!("Error: {:?}", err);
                                 self.output.close(CloseCode::Invalid)?;
                             },
-                            None => println!("(B)Response: {:?}", value),
+                            None => {
+                                match value["params"]["result"].as_str() {
+                                    Some("ready") => println!("Submitted transaction; Waiting response from Zerochain..."),
+                                    _ => error!("Responce error."),
+                                }
+                            },
                         }
                     },
-                    Ok(_) => {
-                        println!("(Unknown request id) Response: {}", value);
-                        self.output.close(CloseCode::Invalid)?;
-                    },
                     Err(_) => {
-                        println!("(Error assigning request id) Response: {}", value);
+                        error!("(Error assigning request id) Response: {}", value);
                         self.output.close(CloseCode::Invalid)?;
                     },
                 }
@@ -126,7 +127,7 @@ impl Handler for Submitter {
                     Some("author_extrinsicUpdate") => {
                         match value["params"]["result"].as_str() {
                             Some(_res) => {
-                                println!("(E)Response: {}", value);
+                                debug!("(E)Response: {}", value);
                             },
                             None => {
                                 self.result.send(hexstr_to_hash(value["params"]["result"]["finalized"].as_str().unwrap().to_string()))
@@ -138,11 +139,11 @@ impl Handler for Submitter {
                         }
                     },
                     Some(_) => {
-                        println!("(Unsupported method) Response: {}", value);
+                        error!("(Unsupported method) Response: {}", value);
                         self.output.close(CloseCode::Invalid)?;
                     },
                     None => {
-                        println!("(No method in response) Response: {}", value);
+                        error!("(No method in response) Response: {}", value);
                         self.output.close(CloseCode::Invalid)?;
                     },
                 }
