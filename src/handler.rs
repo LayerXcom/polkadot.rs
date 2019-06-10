@@ -108,12 +108,7 @@ impl Handler for Submitter {
                                 error!("Error: {:?}", err);
                                 self.output.close(CloseCode::Invalid)?;
                             },
-                            None => {
-                                match value["params"]["result"].as_str() {
-                                    Some("ready") => println!("Submitted transaction; Waiting response from Zerochain..."),
-                                    _ => error!("Responce error."),
-                                }
-                            },
+                            None => println!("Submitted transaction; Waiting response from Zerochain..."),
                         }
                     },
                     Err(_) => {
