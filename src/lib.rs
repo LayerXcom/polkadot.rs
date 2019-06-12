@@ -22,7 +22,7 @@ pub enum Url {
     /// Connecting localhost, 9944 port.
     Local,
     /// Connecting customized endpoint.
-    Custom(&'static str),
+    Custom(String),
 }
 
 /// Define url for json-rpc over websocket
