@@ -1,5 +1,6 @@
 use ws::{Result, Handler, Sender, Message, Handshake, CloseCode};
 use crossbeam::channel::Sender as ThreadOut;
+use std::sync::mpsc::Sender as StdThreadOut;
 use ws::{ErrorKind, Error};
 use crate::{Hash, utils::hexstr_to_hash};
 
@@ -141,6 +142,43 @@ impl Handler for Submitter {
                         error!("(No method in response) Response: {}", value);
                         self.output.close(CloseCode::Invalid)?;
                     },
+                }
+            }
+        };
+
+        Ok(())
+    }
+}
+
+pub struct SubscriptionHandler {
+    pub output: Sender,
+    pub request: String,
+    pub result: StdThreadOut<String>,
+}
+
+impl Handler for SubscriptionHandler {
+    fn on_open(&mut self, _: Handshake) -> Result<()> {
+        self.output.send(self.request.clone())
+            .map_err(|_| Error::new(ErrorKind::Internal, "must connect"))?;
+
+        Ok(())
+    }
+
+    fn on_message(&mut self, msg: Message) -> Result<()> {
+        let txt = msg.as_text()?;
+        let value: serde_json::Value = serde_json::from_str(txt)
+            .map_err(|_| Error::new(ErrorKind::Internal, "Request deserialization is infallible; qed"))?;
+
+        match value["id"].as_str() {
+            Some(_id) => {},
+            None => {
+                match value["method"].as_str() {
+                    Some("state_storage") => {
+                        let changes = &value["params"]["result"]["changes"];
+                        let res_str = changes[0][1].as_str().unwrap().to_string();
+                        self.result.send(res_str).unwrap();
+                    },
+                    _ => error!("unsupported method"),
                 }
             }
         };

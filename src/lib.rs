@@ -8,6 +8,9 @@ use crossbeam;
 use crossbeam::channel::unbounded;
 use parity_codec::Encode;
 use runtime_primitives::traits::Extrinsic;
+use std::sync::mpsc::Sender as StdThreadOut;
+use std::sync::mpsc::channel;
+use std::thread;
 
 pub mod utils;
 pub mod handler;
@@ -132,6 +135,36 @@ impl Api {
 
         submit(&self.0[..], req.to_string())
     }
+
+    pub fn subscribe_events(&self, sender: StdThreadOut<String>) {
+        let key_hash = storage_key_hash("System", "Events", None);
+        let req = json!({
+            "method": "state_subscribeStorage",
+            "params": [[key_hash]],
+            "jsonrpc": "2.0",
+            "id": "1",
+        }).to_string();
+
+        let (tx, rx) = channel();
+        let url = self.0.clone();
+
+        let _client = thread::Builder::new()
+            .name("client".to_string())
+            .spawn(move || {
+                connect(url, |output| {
+                    SubscriptionHandler {
+                        output,
+                        request: req.clone(),
+                        result: tx.clone(),
+                    }
+                }).expect("must connect")
+            }).expect("must run");
+
+        loop {
+            let res: String = rx.recv().expect("must not be empty");
+            sender.send(res.clone()).unwrap();
+        }
+    }
 }
 
 fn get_response(url: &str, req: String) -> Result<String> {
@@ -189,13 +222,46 @@ fn submit(url: &str, req: String) -> Result<Hash> {
     Ok(rx.recv().expect("must not be empty"))
 }
 
+// fn subscribe(url: String, req: String, sender: StdThreadOut<String>) -> Result<()> {
+//     let (tx, rx) = channel();
+
+//     let _client = thread::Builder::new()
+//         .name("client".to_string())
+//         .spawn(move || {
+//             connect(url, |output| {
+//                 SubscriptionHandler {
+//                     output,
+//                     request: req.clone(),
+//                     result: sender.clone(),
+//                 }
+//             }).expect("must connect")
+//         }).expect("must run");
+
+//     // crossbeam::scope(|scope| {
+//     //     scope.spawn(move |_| {
+//     //         connect(url.to_owned(), |output| {
+//     //             SubscriptionHandler {
+//     //                 output,
+//     //                 request: req.clone(),
+//     //                 result: sender.clone(),
+//     //             }
+//     //         }).expect("must connect")
+//     //     });
+//     // }).expect("must run");
+// // println!("Subscribe to events!!!!!!");
+//     loop {
+//         let res: String = rx.recv().expect("must not be empty");
+//         sender.send(res.clone()).unwrap();
+//     }
+// }
+
 #[cfg(test)]
 mod tests{
     use super::*;
     use hex_literal::{hex, hex_impl};
-    use parity_codec::{Encode, Compact};
+    use parity_codec::{Encode, Compact, Decode};
     use primitives::blake2_256;
-    use runtime::{UncheckedExtrinsic, Call, ConfTransferCall};
+    use runtime::{UncheckedExtrinsic, Call, EncryptedBalancesCall, Event};
     use runtime_primitives::generic::Era;
     use zprimitives::{Proof, Ciphertext, PkdAddress, SigVerificationKey, RedjubjubSignature};
     use zjubjub::{curve::{
@@ -214,7 +280,7 @@ mod tests{
 
         let pkd_addr_alice: [u8; 32] = hex!("fd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc2");
         let alice_address = PkdAddress::from_slice(&pkd_addr_alice);
-        let mut res = api.get_storage("ConfTransfer", "EncryptedBalance", Some(alice_address.encode())).unwrap();
+        let mut res = api.get_storage("EncryptedBalances", "EncryptedBalance", Some(alice_address.encode())).unwrap();
 
         for _ in 0..4 {
             res.remove(2);
@@ -243,23 +309,24 @@ mod tests{
     fn test_submit_extrinsic() {
         let api = Api::init(Url::Local);
 
-        let proof: [u8; 192] = hex!("8ff35054c963afa7e0cbfd42e4517a4ab10a31798134f8d67d95800d788c804dd59dbe551d9f11426c77b567b803b5428aad134e1946a392153c1ab597d763faaa108ac7a7736759811b34252500db10cc40ba70fbbfe2dd71e2d1ee57b6f5791426df5cf6e36e6ec0a92fab2e76403a84c8bccb724429698d794be760f88d488cbbf031afcebed75a996a0e151a5ade889a8ac6a528481444b53949292177136c887afa22f484b7e509bbde20187e7ed3335e53453f010639cab8af1f0b927b");
-        let accountid_sender: [u8; 32] = hex!("fd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc2");
-        let accountid_recipient: [u8; 32] = hex!("45e66da531088b55dcb3b273ca825454d79d2d1d5c4fa2ba4a12c1fa1ccd6389");
-        let enc10_by_sender: [u8; 64] = hex!("5e4d370d5ca213b8da2c14b192cd5ce9176faaf8a0e94f64bb649ccbe7cad827df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33");
-        let enc10_by_recipient: [u8; 64] = hex!("690faa236b77eeceb0940429c8abed2721a83cf4dcd32b5f8bc0e886a39d8ae9df97523bf003405c38dd66d3a793169618b02e0f13d2a8d669657ffb81a01c33");
+        let proof: [u8; 192] = hex!("a127994f62fefa882271cbe9fd1fffd16bcf3ebb3cd219c04be4333118f33115e4c70e8d199e43e956b8761e1e69bff48ff156d14e7d083a09e341da114b05a5c2eff9bd6aa9881c7ca282fbb554245d2e65360fa72f1de6b538b79a672cdf86072eeb911b1dadbfef2091629cf9ee76cf80ff7ec085258b102caa62f5a2a00b48dce27c91d59c2cdfa23b456c0f616ea1e9061b5e91ec080f1c3c66cf2e13ecca7b7e1530addd2977a123d6ebbea11e9f8c3b1989fc830a309254e663315dcb");
+        let pkd_addr_alice: [u8; 32] = hex!("fd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc2");
+        let pkd_addr_bob: [u8; 32] = hex!("45e66da531088b55dcb3b273ca825454d79d2d1d5c4fa2ba4a12c1fa1ccd6389");
+        let enc10_by_alice: [u8; 64] = hex!("29f38e21e264fb8fa61edc76f79ca2889228d36e40b63f3697102010404ae1d0b8b965029e45bd78aabe14c66458dd03f138aa8b58490974f23aabb53d9bce99");
+        let enc10_by_bob: [u8; 64] = hex!("4c6bda3db6977c29a115fbc5aba03b9c37b767c09ffe6c622fcec42bbb732fc7b8b965029e45bd78aabe14c66458dd03f138aa8b58490974f23aabb53d9bce99");
+        let enc1_by_alice: [u8; 64] = hex!("ed19f1820c3f09da976f727e8531aa83a483d262e4abb1e9e67a1eba843b4034b8b965029e45bd78aabe14c66458dd03f138aa8b58490974f23aabb53d9bce99");
         let rvk: [u8; 32] = hex!("f539db3c0075f6394ff8698c95ca47921669c77bb2b23b366f42a39b05a88c96");
         let rsk_bytes: [u8; 32] = hex!("a36bb97dbe99b6c9e1f58b44130797d088d5439d97748229772449b29ec15909");
 
         let sig_vk = SigVerificationKey::from_slice(&rvk[..]);
 
-        let calls = Call::ConfTransfer(ConfTransferCall::confidential_transfer(
+        let calls = Call::EncryptedBalances(EncryptedBalancesCall::confidential_transfer(
             Proof::from_slice(&proof[..]),
-            PkdAddress::from_slice(&accountid_sender[..]),
-            PkdAddress::from_slice(&accountid_recipient[..]),
-            Ciphertext::from_slice(&enc10_by_sender[..]),
-            Ciphertext::from_slice(&enc10_by_recipient[..]),
-            sig_vk
+            PkdAddress::from_slice(&pkd_addr_alice[..]),
+            PkdAddress::from_slice(&pkd_addr_bob[..]),
+            Ciphertext::from_slice(&enc10_by_alice[..]),
+            Ciphertext::from_slice(&enc10_by_bob[..]),
+            Ciphertext::from_slice(&enc1_by_alice[..]),
         ));
 
         let height_str = api.get_latest_height().unwrap();
@@ -315,5 +382,65 @@ mod tests{
         println!("era: {:?}", &era.encode()[..]);
         println!("Start sending tx....");
         let _tx_hash = api.submit_extrinsic(&uxt).unwrap();
+    }
+
+    #[test]
+    fn test_subscribe_event() {
+        let api = Api::init(Url::Local);
+        let (tx, rx) = channel();
+
+        println!("Subscribe to events");
+
+        let _event_sbscriber = thread::Builder::new()
+            .name("eventsubscriber".to_string())
+            .spawn(move || {
+                api.subscribe_events(tx.clone());
+            }).unwrap();
+
+        loop {
+            let event_str = rx.recv().unwrap();
+            let res_vec = hexstr_to_vec(event_str);
+            let mut er_enc = res_vec.as_slice();
+            let events = Vec::<system::EventRecord::<Event>>::decode(&mut er_enc);
+            match events {
+                Some(events) => {
+                    for event in &events {
+                        match &event.event {
+                            Event::encrypted_balances(enc_be) => {
+                                println!("encrypted balance event: {:?}", enc_be);
+                                match &enc_be {
+                                    encrypted_balances::RawEvent::ConfidentialTransfer(
+                                        zkproof,
+                                        address_sender,
+                                        address_recipient,
+                                        amount_sender,
+                                        amount_recipient,
+                                        fee_sender,
+                                        enc_balances,
+                                        sig_vk
+                                    ) => {
+                                        println!("zk proof: {:?}", zkproof);
+                                        println!("address_sender: {:?}", address_sender);
+                                        println!("address_recipient: {:?}", address_recipient);
+                                        println!("amount_sender: {:?}", amount_sender);
+                                        println!("amount_recipient: {:?}", amount_recipient);
+                                        println!("fee_sender: {:?}", fee_sender);
+                                        println!("enc_balances: {:?}", enc_balances);
+                                        println!("zk proof: {:?}", sig_vk);
+                                    },
+                                    _ => {
+                                        println!("ignoring unsupported encrypted_balances event");
+                                    }
+                                }
+                            }
+                            _ => {
+                                println!("ignoring unsupported module event: {:?}", event.event)
+                            }
+                        }
+                    }
+                },
+                None => error!("couldn't decode event record list")
+            }
+        }
     }
 }
