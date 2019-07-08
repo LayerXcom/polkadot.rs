@@ -6,8 +6,10 @@ use serde_json::json;
 pub use primitives::H256 as Hash;
 use crossbeam;
 use crossbeam::channel::unbounded;
-use parity_codec::Encode;
+use parity_codec::{Encode, Decode};
 use runtime_primitives::traits::Extrinsic;
+use runtime::Event;
+use system;
 use std::sync::mpsc::Sender as StdThreadOut;
 use std::sync::mpsc::channel;
 use std::thread;
@@ -136,7 +138,7 @@ impl Api {
         submit(&self.0[..], req.to_string())
     }
 
-    pub fn subscribe_events(&self, sender: StdThreadOut<String>) {
+    pub fn subscribe_events(&self, sender: StdThreadOut<Event>) {
         let key_hash = storage_key_hash("System", "Events", None);
         let req = json!({
             "method": "state_subscribeStorage",
@@ -154,15 +156,28 @@ impl Api {
                 connect(url, |output| {
                     SubscriptionHandler {
                         output,
-                        request: req.clone(),
+                        request:
+                        req.clone(),
                         result: tx.clone(),
                     }
                 }).expect("must connect")
             }).expect("must run");
 
         loop {
-            let res: String = rx.recv().expect("must not be empty");
-            sender.send(res.clone()).unwrap();
+            let event_str = rx.recv().expect("must not be empty");
+            let res_vec = hexstr_to_vec(event_str);
+            let mut er_enc = res_vec.as_slice();
+            // TODO: Make abstract to generic runtime
+            let events = Vec::<system::EventRecord::<Event>>::decode(&mut er_enc);
+
+            match events {
+                Some(events) => {
+                    for event in &events {
+                        sender.send(event.event.clone()).unwrap();
+                    }
+                },
+                None => println!("couldn't decode event record list")
+            }
         }
     }
 }
@@ -397,50 +412,78 @@ mod tests{
                 api.subscribe_events(tx.clone());
             }).unwrap();
 
-        loop {
-            let event_str = rx.recv().unwrap();
-            let res_vec = hexstr_to_vec(event_str);
-            let mut er_enc = res_vec.as_slice();
-            let events = Vec::<system::EventRecord::<Event>>::decode(&mut er_enc);
-            match events {
-                Some(events) => {
-                    for event in &events {
-                        match &event.event {
-                            Event::encrypted_balances(enc_be) => {
-                                println!("encrypted balance event: {:?}", enc_be);
-                                match &enc_be {
-                                    encrypted_balances::RawEvent::ConfidentialTransfer(
-                                        zkproof,
-                                        address_sender,
-                                        address_recipient,
-                                        amount_sender,
-                                        amount_recipient,
-                                        fee_sender,
-                                        enc_balances,
-                                        sig_vk
-                                    ) => {
-                                        println!("zk proof: {:?}", zkproof);
-                                        println!("address_sender: {:?}", address_sender);
-                                        println!("address_recipient: {:?}", address_recipient);
-                                        println!("amount_sender: {:?}", amount_sender);
-                                        println!("amount_recipient: {:?}", amount_recipient);
-                                        println!("fee_sender: {:?}", fee_sender);
-                                        println!("enc_balances: {:?}", enc_balances);
-                                        println!("zk proof: {:?}", sig_vk);
-                                    },
-                                    _ => {
-                                        println!("ignoring unsupported encrypted_balances event");
-                                    }
-                                }
-                            }
-                            _ => {
-                                println!("ignoring unsupported module event: {:?}", event.event)
-                            }
-                        }
-                    }
-                },
-                None => error!("couldn't decode event record list")
-            }
+        let res = rx.recv().unwrap();
+        match &res {
+            Event::encrypted_balances(enc_be) => {
+                match &enc_be {
+                    encrypted_balances::RawEvent::ConfidentialTransfer(
+                        zkproof,
+                        address_sender,
+                        address_recipient,
+                        amount_sender,
+                        amount_recipient,
+                        fee_sender,
+                        enc_balances,
+                        sig_vk
+                    ) => {
+                        println!("zk proof: {:?}", zkproof);
+                        println!("address_sender: {:?}", address_sender);
+                        println!("address_recipient: {:?}", address_recipient);
+                        println!("amount_sender: {:?}", amount_sender);
+                        println!("amount_recipient: {:?}", amount_recipient);
+                        println!("fee_sender: {:?}", fee_sender);
+                        println!("enc_balances: {:?}", enc_balances);
+                        println!("zk proof: {:?}", sig_vk);
+                    },
+                }
+            },
+            _ => println!("ignoring unsupported module event: {:?}", res)
         }
+
+        // loop {
+        //     let event_str = rx.recv().unwrap();
+        //     let res_vec = hexstr_to_vec(event_str);
+        //     let mut er_enc = res_vec.as_slice();
+        //     let events = Vec::<system::EventRecord::<Event>>::decode(&mut er_enc);
+        //     match events {
+        //         Some(events) => {
+        //             for event in &events {
+        //                 match &event.event {
+        //                     Event::encrypted_balances(enc_be) => {
+        //                         println!("encrypted balance event: {:?}", enc_be);
+        //                         match &enc_be {
+        //                             encrypted_balances::RawEvent::ConfidentialTransfer(
+        //                                 zkproof,
+        //                                 address_sender,
+        //                                 address_recipient,
+        //                                 amount_sender,
+        //                                 amount_recipient,
+        //                                 fee_sender,
+        //                                 enc_balances,
+        //                                 sig_vk
+        //                             ) => {
+        //                                 println!("zk proof: {:?}", zkproof);
+        //                                 println!("address_sender: {:?}", address_sender);
+        //                                 println!("address_recipient: {:?}", address_recipient);
+        //                                 println!("amount_sender: {:?}", amount_sender);
+        //                                 println!("amount_recipient: {:?}", amount_recipient);
+        //                                 println!("fee_sender: {:?}", fee_sender);
+        //                                 println!("enc_balances: {:?}", enc_balances);
+        //                                 println!("zk proof: {:?}", sig_vk);
+        //                             },
+        //                             _ => {
+        //                                 println!("ignoring unsupported encrypted_balances event");
+        //                             }
+        //                         }
+        //                     }
+        //                     _ => {
+        //                         println!("ignoring unsupported module event: {:?}", event.event)
+        //                     }
+        //                 }
+        //             }
+        //         },
+        //         None => error!("couldn't decode event record list")
+        //     }
+        // }
     }
 }

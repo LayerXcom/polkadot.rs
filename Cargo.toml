@@ -19,6 +19,8 @@ serde_derive = "1.0"
 byteorder = "1"
 crossbeam = "0.7"
 parity-codec = "3.2"
+system = { package = "srml-system", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
+runtime = { package = "zerochain-runtime", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
 
 [dependencies.primitives]
 git = 'https://github.com/osuketh/substrate.git'
@@ -32,10 +34,8 @@ package = "sr-primitives"
 
 [dev-dependencies]
 zprimitives = { package = "zerochain-primitives", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
-runtime = { package = "zerochain-runtime", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
 zjubjub = { package = "jubjub", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
 zpairing = { package = "zerochain-pairing", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
-system = { package = "srml-system", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
 encrypted-balances = { package = "encrypted-balances", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
 rand = "0.4"
 hex-literal = '0.1'
