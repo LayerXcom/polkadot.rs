@@ -23,13 +23,13 @@ system = { package = "srml-system", git = "https://github.com/LayerXcom/zero-cha
 runtime = { package = "zerochain-runtime", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
 
 [dependencies.primitives]
-git = 'https://github.com/osuketh/substrate.git'
+git = 'https://github.com/paritytech/substrate'
 package = 'substrate-primitives'
-branch = "patch-zerochain"
+tag = 'v1.0.0rc2.1'
 
 [dependencies.runtime_primitives]
-git = 'https://github.com/osuketh/substrate.git'
-branch = "patch-zerochain"
+git = 'https://github.com/paritytech/substrate'
+tag = 'v1.0.0rc2.1'
 package = "sr-primitives"
 
 [dev-dependencies]
