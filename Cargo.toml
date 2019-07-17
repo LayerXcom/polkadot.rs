@@ -31,11 +31,11 @@ branch = "patch-zerochain"
 package = "sr-primitives"
 
 [dev-dependencies]
-zprimitives = { package = "zerochain-primitives", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
-runtime = { package = "zerochain-runtime", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
-zjubjub = { package = "jubjub", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
-zpairing = { package = "zerochain-pairing", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
-system = { package = "srml-system", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
-encrypted-balances = { package = "encrypted-balances", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/asset-module" }
+zprimitives = { package = "zerochain-primitives", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/fix-zface" }
+runtime = { package = "zerochain-runtime", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/fix-zface" }
+zjubjub = { package = "jubjub", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/fix-zface" }
+zpairing = { package = "zerochain-pairing", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/fix-zface" }
+system = { package = "srml-system", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/fix-zface" }
+encrypted-balances = { package = "encrypted-balances", git = "https://github.com/LayerXcom/zero-chain", branch = "feature/fix-zface" }
 rand = "0.4"
 hex-literal = '0.1'
