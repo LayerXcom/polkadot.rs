@@ -1,6 +1,6 @@
 use crate::Hash;
 use hex;
-use primitives::twox_128;
+use primitives::{twox_128, blake2_256};
 use byteorder::{LittleEndian, ByteOrder};
 
 pub fn hexstr_to_hash(hexstr: String) -> Hash {
@@ -50,7 +50,7 @@ pub fn storage_key_hash(module: &str, storage_key: &str, params: Option<Vec<u8>>
         match params {
             Some(mut p) => {
                 key.append(&mut p);
-                key_hash = hex::encode(twox_128(&key));
+                key_hash = hex::encode(blake2_256(&key));
                 },
             None => {
                 key_hash = hex::encode(twox_128(&key));

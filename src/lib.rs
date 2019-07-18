@@ -278,12 +278,13 @@ mod tests{
         let res = hexstr_to_u64(res_str);
         println!("TransactionBaseFee is {}", res);
 
-        let res_str = api.get_storage("EncryptedBalances", "EpochLength", None).unwrap();
-        let res = hexstr_to_u64(res_str);
-        println!("epoch_length is {}", res);
-
         let pkd_addr_alice: [u8; 32] = hex!("fd0c0c0183770c99559bf64df4fe23f77ced9b8b4d02826a282bcd125117dcc2");
         let alice_address = PkdAddress::from_slice(&pkd_addr_alice);
+
+        let res_str = api.get_storage("EncryptedBalances", "LastRollover", Some(alice_address.encode())).unwrap();
+        let res = hexstr_to_u64(res_str);
+        println!("LastRollover is {}", res);
+
         let mut res = api.get_storage("EncryptedBalances", "EncryptedBalance", Some(alice_address.encode())).unwrap();
         println!("Encrypted balance: {:?}", res);
 
