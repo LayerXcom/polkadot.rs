@@ -1,7 +1,8 @@
 #[macro_use]
 extern crate log;
 
-use ws::{connect, Result};
+pub use ws::Result;
+use ws::connect;
 use serde_json::json;
 pub use primitives::H256 as Hash;
 use crossbeam;
